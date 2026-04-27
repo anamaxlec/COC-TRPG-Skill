@@ -2,13 +2,9 @@
 
 《克苏鲁的呼唤》第 7 版中文跑团助手，用于和模型一起跑 COC、车卡、写模组、生成 NPC、投骰和做规则速查。
 
-## 安装到 Codex
+## 安装
 
-将整个目录复制到 Codex skills 目录：
-
-```bash
-/Users/max333/.codex/skills/coc-trpg-skill/
-```
+放置到目录或者直接发给AI Agent
 
 安装后可以说：
 
