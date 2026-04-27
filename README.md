@@ -15,6 +15,8 @@
 - **🎲 标准 D100 检定**：支持普通检定、奖励骰、惩罚骰、对抗检定、SAN 损失、伤害计算。
 - **⚙️ 更稳的骰子实现**：支持 `1d4-1`、`1d6+1d4` 等 COC 常见骰式；D100 按十位骰 + 个位骰处理，正确识别 `00+0=100`。
 - **🕯️ Keeper 友好**：内置“不剧透真相”“关键线索不被单次检定卡死”“失败推进局势”等跑团原则。
+- **🎬 更完整的 KP 叙述**：新场景、关键发现和恐怖升级时默认给出更充分的环境、感官、人物反应和异常细节。
+- **🧩 开团前人设锚定**：主角可由玩家自写或选择标签生成背景；配角 NPC 由模型生成并记录公开身份、关系与隐藏动机。
 - **🧭 行动选项循环**：每次场景推进、玩家行动结算或 NPC 互动后，默认给出 2-4 个可行动选项，同时保留自由行动。
 - **🎭 暗骰与 SAN 策略**：支持隐藏侦察、心理学、灵感、POW 等暗骰；SAN 检定可按场景选择公开、隐藏或延迟公开。
 - **🧠 跑团记忆系统**：通过 `campaign_memory.md` 记录关键剧情、线索、NPC 状态、隐藏真相、暗骰与延迟 SAN，帮助模型续团时自我回忆。
@@ -29,6 +31,7 @@ coc-trpg-skill/
 ├── LICENSE                           # MIT 许可证
 ├── scripts/
 │   ├── dice.py                       # 骰子、检定、SAN、伤害、技能点
+│   ├── memory.py                     # 跑团记忆管理
 │   ├── random_name.py                # 随机姓名生成
 │   └── random_encounter.py           # 随机遭遇生成
 ├── templates/
@@ -36,6 +39,7 @@ coc-trpg-skill/
 │   ├── scenario_outline.md           # 模组/剧本大纲模板
 │   ├── npc_card.md                   # NPC 数据卡模板
 │   ├── background_table.md           # D100 背景表
+│   ├── cast_anchor.md                # 主角与 NPC 人设锚定模板
 │   ├── campaign_memory.md            # 跑团记忆模板
 │   └── pregens.md                    # 预设调查员
 ├── characters/
@@ -151,6 +155,57 @@ python scripts/dice.py --damage 1d10+2 1d4
 python scripts/dice.py --skill-calc 70 60 65 --credit 20
 ```
 
+### `scripts/memory.py`
+
+`memory.py` 使用 JSON 作为结构化源记忆，并自动导出 Markdown。它比单纯依靠对话上下文更稳定，适合长团、续团和多次会话。
+
+```bash
+# 创建新跑团记忆
+python scripts/memory.py init \
+  --name "榕渊" \
+  --era "现代" \
+  --location "福州" \
+  --characters "林知远" \
+  --style "都市怪谈、慢热调查"
+
+# 续团前读取记忆；--keeper 会包含幕后真相、暗骰、隐藏 SAN
+python scripts/memory.py recall --name "榕渊" --keeper
+
+# 列出已有记忆
+python scripts/memory.py list
+
+# 更新当前场景、时间、地点
+python scripts/memory.py set --name "榕渊" --field scene --value "旧仓山洋楼二层"
+python scripts/memory.py set --name "榕渊" --field time --value "第 1 日 23:40"
+
+# 追加玩家可知信息
+python scripts/memory.py add --name "榕渊" --section protagonist --text "林知远：失眠的民俗研究者，执念是查清父亲失踪原因。"
+python scripts/memory.py add --name "榕渊" --section cast --text "房东陈姨：表面焦虑，回避谈论 1998 年火灾。"
+python scripts/memory.py add --name "榕渊" --section clue --text "二层墙纸下有一串重复出现的潮湿手印。"
+
+# 追加 Keeper 隐藏信息
+python scripts/memory.py add --name "榕渊" --section secret --text "陈姨知道地下室门后不是储藏间，而是祭祀入口。"
+python scripts/memory.py add --name "榕渊" --section hidden-roll --text "暗骰心理学失败：玩家只感觉陈姨紧张，没有识破关键谎言。"
+python scripts/memory.py add --name "榕渊" --section hidden-san --text "现实错位造成 1 点隐藏 SAN，真相揭露时结算。"
+
+# 重新导出 Markdown
+python scripts/memory.py render --name "榕渊"
+```
+
+说明：
+
+- `*_memory.json` 是结构化源文件，模型优先读取它。
+- `*_memory.md` 是同步导出的可读版本，方便人工检查。
+- 更新同一个团的记忆时应按顺序执行，不要并行追加多条记忆。
+- 脚本使用文件锁和原子写入，降低记忆文件损坏风险。
+
+生成文件默认位于：
+
+```text
+scenarios/<团名>_memory.json
+scenarios/<团名>_memory.md
+```
+
 ### `scripts/random_name.py`
 
 ```bash
@@ -196,9 +251,33 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 
 - 不提前泄露 Keeper Only 真相。
 - 每次描述新场景、回应 NPC、结算玩家行动或检定后，都给出 2-4 个具体可行动选项，并允许玩家自由行动。
+- 新场景、关键发现、恐怖升级时叙述要稍微展开：交代空间结构、感官细节、人物反应和不协调之处。
 - 关键线索至少准备 3 条路径，不让剧情卡在一次失败检定上。
 - 检定失败应带来代价、风险或局势变化，而不是直接让故事停止。
 - 遇到血腥、身体恐怖、宗教敏感或精神崩溃内容时，先给玩家简短提醒，并允许淡化处理。
+
+### 开团前人设锚定
+
+正式开始第一幕前，需要先锚定主角和关键 NPC。
+
+主角支持三种方式：
+
+1. 玩家自写背景。
+2. 使用已有角色卡。
+3. 玩家选择 4-7 个标签，由模型生成 120-220 字背景介绍。
+
+推荐标签维度：
+
+- 身份：记者、医生、学生、私家侦探、民俗研究者、警员、失业者、归乡者。
+- 性格：谨慎、强迫理性、好奇心过重、嘴硬心软、疲惫、控制欲强、逃避型。
+- 创伤：失踪亲人、职业污点、童年事故、债务、火灾记忆、梦魇、被误解的过去。
+- 欲望：证明自己、找人、赚钱、逃离过去、完成遗愿、揭开真相、保护某人。
+- 弱点：失眠、酗酒、偏执、恐惧封闭空间、恐惧水、过度共情、容易冲动。
+- 关系钩子：旧友、债主、导师、前任、房东、病人、同事、失踪者家属。
+
+配角 NPC 由模型生成，建议 3-6 名，包含盟友/联系人、信息持有者、阻碍者、红鲱鱼、受害者/失踪者、幕后相关者等功能。每名重要 NPC 需要记录公开身份、与主角关系、说话方式、玩家可见目标、Keeper 隐藏动机和首次登场场景。
+
+可使用 `templates/cast_anchor.md` 记录人设锚点，并将关键内容同步写入跑团记忆。
 
 ### 行动选项循环
 
@@ -210,6 +289,15 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 4. “你也可以做其他行动”
 
 选项不是固定路线，玩家可以随时提出自由行动。模型会优先响应玩家行动，再结算后果并给出下一组选择。
+
+### 叙述密度
+
+- 普通行动结算：1-2 段，每段 3-5 句。
+- 新场景、关键发现、恐怖升级：2-4 段。
+- 进入新地点时，至少交代空间结构、光线/声音/气味、可互动对象和一个不协调细节。
+- NPC 出场时，至少给外貌/动作、语气、情绪和与主角关系中的一个触点。
+- 选项保持简洁，避免把叙述压缩成一句话。
+
 
 ### 暗骰与 SAN
 
@@ -224,10 +312,11 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 长期跑团建议使用记忆文件：
 
 ```text
+scenarios/<团名或模组名>_memory.json
 scenarios/<团名或模组名>_memory.md
 ```
 
-新开团时，可从 `templates/campaign_memory.md` 复制一份作为战役记忆。续团时，模型会先读取记忆，再继续剧情。
+新开团时，优先用 `scripts/memory.py init` 创建结构化记忆；续团时，模型会先用 `scripts/memory.py recall --keeper` 自我回忆，再继续剧情。`templates/campaign_memory.md` 保留为人工可读模板。
 
 记忆分为两层：
 
@@ -249,6 +338,7 @@ scenarios/<团名或模组名>_memory.md
 | `templates/scenario_outline.md` | Keeper 版模组大纲 |
 | `templates/npc_card.md` | 路人、配角、核心 NPC 数据卡 |
 | `templates/background_table.md` | D100 背景关键词表 |
+| `templates/cast_anchor.md` | 主角与配角 NPC 人设锚定 |
 | `templates/campaign_memory.md` | 长期跑团记忆模板 |
 | `templates/pregens.md` | 预设调查员库 |
 
