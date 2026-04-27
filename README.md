@@ -17,6 +17,7 @@
 - **🕯️ Keeper 友好**：内置“不剧透真相”“关键线索不被单次检定卡死”“失败推进局势”等跑团原则。
 - **🧭 行动选项循环**：每次场景推进、玩家行动结算或 NPC 互动后，默认给出 2-4 个可行动选项，同时保留自由行动。
 - **🎭 暗骰与 SAN 策略**：支持隐藏侦察、心理学、灵感、POW 等暗骰；SAN 检定可按场景选择公开、隐藏或延迟公开。
+- **🧠 跑团记忆系统**：通过 `campaign_memory.md` 记录关键剧情、线索、NPC 状态、隐藏真相、暗骰与延迟 SAN，帮助模型续团时自我回忆。
 - **🧰 轻量无依赖**：Python 脚本仅使用标准库，不需要额外安装第三方包。
 
 ## 📦 项目结构
@@ -35,6 +36,7 @@ coc-trpg-skill/
 │   ├── scenario_outline.md           # 模组/剧本大纲模板
 │   ├── npc_card.md                   # NPC 数据卡模板
 │   ├── background_table.md           # D100 背景表
+│   ├── campaign_memory.md            # 跑团记忆模板
 │   └── pregens.md                    # 预设调查员
 ├── characters/
 │   └── README.md                     # 角色卡保存目录说明
@@ -217,6 +219,28 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 - **隐藏 SAN**：梦境、记忆篡改、潜意识污染、不可见神话影响、现实错位等不应提前暴露来源的情况。
 - **延迟公开 SAN**：影响已发生，但在真相揭露或场景结束时再统一结算，以保留悬疑。
 
+### 跑团记忆系统
+
+长期跑团建议使用记忆文件：
+
+```text
+scenarios/<团名或模组名>_memory.md
+```
+
+新开团时，可从 `templates/campaign_memory.md` 复制一份作为战役记忆。续团时，模型会先读取记忆，再继续剧情。
+
+记忆分为两层：
+
+- **玩家可知记忆**：已公开的线索、NPC、地点、物品、HP/SAN 状态、未解决问题。
+- **Keeper 记忆**：幕后真相、暗骰结果、隐藏 SAN、延迟公开 SAN、NPC 真实动机、倒计时与伏笔。
+
+默认更新时机：
+
+- 每 3-5 轮普通对话更新一次。
+- 每个场景结束更新一次。
+- 玩家获得关键线索、改变地点、触发不可逆事件时立即更新。
+- 用户说“继续”或上下文变长时，先回忆记忆文件，再继续叙事。
+
 ## 📄 模板文件
 
 | 文件 | 用途 |
@@ -225,6 +249,7 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 | `templates/scenario_outline.md` | Keeper 版模组大纲 |
 | `templates/npc_card.md` | 路人、配角、核心 NPC 数据卡 |
 | `templates/background_table.md` | D100 背景关键词表 |
+| `templates/campaign_memory.md` | 长期跑团记忆模板 |
 | `templates/pregens.md` | 预设调查员库 |
 
 ## 📌 依赖
