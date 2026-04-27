@@ -20,6 +20,7 @@ description: "Call of Cthulhu 7th edition TRPG assistant for Chinese COC play: K
 [5] 生成 NPC
 [6] 投骰 / 技能检定 / SAN
 [7] 规则速查 / Keeper 工具箱
+[8] 存档 / 读档 / 导入导出
 ```
 
 用户只回复数字时，直接进入对应流程；不要要求用户重复完整需求。
@@ -35,7 +36,7 @@ description: "Call of Cthulhu 7th edition TRPG assistant for Chinese COC play: K
 - 配角 NPC：由模型生成 3-6 名关键 NPC，并锚定公开身份、隐藏动机、与主角关系。
 - 边界：涉及血腥、身体恐怖、宗教敏感或精神崩溃内容时，先给一句简短提醒并允许淡化处理。
 
-如果是继续已有跑团，先查找并读取 `scenarios/<团名或模组名>_memory.md`；如果没有明确团名，询问用户要继续哪个团，或根据最近的剧情记忆文件判断。读取记忆后先做内部连续性检查，再继续叙事。
+如果是继续已有跑团，先查找并读取 `scenarios/<团名或模组名>_memory.md`；如果用户提供 `.cocsave.json` 存档路径，先用 `scripts/memory.py load` 导入。没有明确团名时，询问用户要继续哪个团，或根据最近的剧情记忆/存档文件判断。读取记忆后先做内部连续性检查，再继续叙事。
 
 担任 Keeper 时：
 
@@ -152,16 +153,94 @@ python scripts/memory.py add --name "<团名>" --section clue --text "<线索内
 python scripts/memory.py add --name "<团名>" --section secret --text "<幕后信息>"
 python scripts/memory.py add --name "<团名>" --section hidden-roll --text "<暗骰记录>"
 python scripts/memory.py add --name "<团名>" --section hidden-san --text "<隐藏或延迟 SAN>"
+
+# 追加剧本连续性记忆
+python scripts/memory.py add --name "<团名>" --section outline --text "<核心设定或剧本前提>"
+python scripts/memory.py add --name "<团名>" --section act --text "<分幕结构或当前幕目标>"
+python scripts/memory.py add --name "<团名>" --section scene-node --text "<场景节点、入口、出口、风险>"
+python scripts/memory.py add --name "<团名>" --section clue-web --text "<线索 A 指向 B，B 推向核心真相>"
+python scripts/memory.py add --name "<团名>" --section npc-function --text "<NPC 的剧本功能和隐藏作用>"
+python scripts/memory.py add --name "<团名>" --section threat-clock --text "<玩家不行动时事件如何推进>"
+python scripts/memory.py add --name "<团名>" --section ending --text "<可能结局或触发条件>"
+python scripts/memory.py add --name "<团名>" --section continuity --text "<不能前后矛盾的剧本约束>"
+
+# 玩家主动存档：导出可复制到其他电脑的单文件存档
+python scripts/memory.py save --name "<团名>"
+
+# 读档/换电脑续玩：从单文件存档恢复记忆
+python scripts/memory.py load --file "saves/<存档名>.cocsave.json"
 ```
 
 `memory.py` 会维护 `scenarios/<团名>_memory.json` 作为结构化源文件，并同步导出 `scenarios/<团名>_memory.md` 供人工阅读。新开团时也可参考 `templates/campaign_memory.md`。若用户不希望写文件，仍必须在对话内维护同样结构的“记忆快照”。
 
 不要并行执行多个 `memory.py add/set/init/render` 更新同一个团的记忆；记忆更新要按顺序进行。脚本已使用文件锁和原子写入降低损坏风险，但顺序更新更利于剧情一致。
 
-记忆分两层：
+### 剧本连续性记忆
+
+剧本相关记忆要和角色状态、线索状态一样连续。长期团不能只记录“玩家走到哪里”，还要记录“剧本为什么能继续成立”。
+
+剧本记忆默认是 Keeper Only，不直接展示给玩家。至少维护以下内容：
+
+- **核心设定 / 剧本前提**：怪异事件真实原因、神话或非神话解释、幕后规则。
+- **分幕结构**：开端、调查中段、转折、高潮、结局阶段，以及当前位于哪一幕。
+- **场景节点**：每个重要地点/场景的入口、出口、可发现线索、风险和已触发变化。
+- **线索网络**：关键推论至少 3 条线索路径；记录哪些线索已公开、哪些仍未发现。
+- **NPC 剧本功能**：谁是盟友、阻碍、红鲱鱼、信息持有者、受害者、幕后相关者。
+- **威胁时钟**：玩家不行动时，仪式、追踪者、敌方行动、污染或倒计时如何推进。
+- **结局条件**：不同玩家选择可能导向的结局、失败条件、开放式收束方式。
+- **连续性约束**：已经说死的事实、不能反悔的设定、需要回收的伏笔。
+
+更新时机：
+
+- 新建模组或生成大纲后，先写入 `outline/act/scene-node/clue-web`。
+- 玩家进入新场景、改变剧本节点、跳过预设路径、触发关键线索或让 NPC 功能变化时，立即更新对应剧本记忆。
+- 存档前必须检查剧本当前节点、线索网络、威胁时钟和可能结局是否仍能接上。
+
+### 存档与读档
+
+玩家可以在任意非即时结算点自由存档。用户说“存档”“保存进度”“导出存档”“读档”“导入存档”“换电脑继续”时，必须优先处理存档请求，不要继续推进剧情。
+
+存档原则：
+
+- 存档前先把当前场景、时间、地点、调查员状态、物品、已知线索、NPC 状态、暗骰、隐藏 SAN、倒计时和剧本连续性记忆写入记忆。
+- 写入完成后调用 `python scripts/memory.py save --name "<团名>"` 导出 `.cocsave.json`；脚本会同时生成“玩家可知续跑摘要”和“Keeper 续跑摘要”并写入存档。
+- 存档文件位于 `saves/`，是单文件可迁移存档；复制到另一台电脑的同名 skill 目录后，可用 `load` 导入继续。
+- `.cocsave.json` 包含 Keeper Only 真相、暗骰和隐藏 SAN。为避免剧透，除非玩家明确要求，不要把存档内容直接展开给玩家看。
+- 如果用户想开分支路线，可用 `load --name "<新团名>"` 导入成新团名，避免覆盖原进度。
+- 另一台电脑导入后，先执行 `recall --keeper` 读取续跑摘要，再做连续性检查，然后从“当前场景”继续。
+
+续跑摘要必须覆盖：
+
+- 已进行流程：重要场景、玩家选择、已发生后果。
+- 当前落点：时间、地点、当前场景、同行者和直接风险。
+- 玩家可知内容：主角状态、已知线索、NPC 公开状态、未解决问题。
+- Keeper 内容：幕后真相、剧本当前节点、线索网络、NPC 隐藏动机、未公开线索、暗骰、隐藏 SAN、倒计时、伏笔。
+- 接入方式：下次开场的上回回顾和 2-4 个可行动选项。
+
+存档/读档常用命令：
+
+```bash
+# 导出默认命名存档：saves/<团名>_<时间>.cocsave.json
+python scripts/memory.py save --name "<团名>"
+
+# 导出到指定路径
+python scripts/memory.py save --name "<团名>" --output "saves/<自定义名>.cocsave.json"
+
+# 导入存档并沿用原团名
+python scripts/memory.py load --file "saves/<存档名>.cocsave.json"
+
+# 导入为分支团名
+python scripts/memory.py load --file "saves/<存档名>.cocsave.json" --name "<新团名>"
+
+# 导入后回忆续跑摘要
+python scripts/memory.py recall --name "<团名或新团名>" --keeper
+```
+
+记忆分三层：
 
 - **玩家可知记忆**：调查员已经知道的事实、线索、NPC、地点、物品、伤势、SAN 变化。
 - **Keeper 记忆**：真相、暗骰结果、隐藏 SAN、延迟公开 SAN、NPC 真实动机、倒计时、伏笔、未揭露线索。Keeper 记忆不得直接展示给玩家。
+- **剧本连续性记忆**：核心设定、分幕结构、场景节点、线索网络、NPC 剧本功能、威胁时钟、结局条件和不能冲突的事实。默认 Keeper Only。
 
 每次以下事件发生后都要更新记忆：
 
@@ -170,6 +249,7 @@ python scripts/memory.py add --name "<团名>" --section hidden-san --text "<隐
 - 场景切换、时间推进、地点变化。
 - 玩家得到新线索、作出不可逆选择、触发关键事件。
 - NPC 态度、位置、状态发生变化。
+- 剧本节点、线索链、NPC 剧本功能、威胁时钟或结局条件发生变化。
 - HP/SAN/MP/状态、物品、关系、嫌疑、追踪线发生变化。
 - 暗骰、隐藏 SAN、延迟公开 SAN、敌方行动、仪式进度、倒计时发生变化。
 
@@ -186,7 +266,8 @@ python scripts/memory.py add --name "<团名>" --section hidden-san --text "<隐
 2. 玩家角色 HP/SAN/物品/状态是否一致。
 3. 已知线索和未揭露真相是否混淆。
 4. NPC 的位置、态度、秘密是否前后一致。
-5. 是否有未结算的暗骰、延迟 SAN、倒计时或追踪者。
+5. 当前剧本节点、线索网络、威胁时钟和可能结局是否还能接上。
+6. 是否有未结算的暗骰、延迟 SAN、倒计时或追踪者。
 
 对玩家展示时，可在每个大场景开头给一个很短的“上回回顾”，只包含玩家已知信息；不要输出 Keeper 记忆。
 

@@ -14,3 +14,11 @@ scenarios/榕渊_memory.md
 默认提交本说明文件以保留目录结构；实际生成的模组和记忆文件会被 `.gitignore` 忽略，避免误提交未公开内容、暗骰结果或剧透信息。
 
 长期跑团建议用 `scripts/memory.py` 创建和更新 `*_memory.json`，再自动导出 `*_memory.md` 供人工查看。
+
+如果需要把进度复制到另一台电脑，不要只复制这里的 `*_memory.json`。优先使用：
+
+```bash
+python scripts/memory.py save --name "<团名>"
+```
+
+它会在 `saves/` 目录导出单个 `.cocsave.json` 存档文件。

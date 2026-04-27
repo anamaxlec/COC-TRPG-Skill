@@ -5,6 +5,7 @@ COC 跑团记忆工具
 用 JSON 做源记忆，Markdown 作为可读导出。
 """
 import argparse
+import hashlib
 import json
 import re
 from copy import deepcopy
@@ -19,6 +20,9 @@ except ImportError:  # pragma: no cover - Windows fallback
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS_DIR = ROOT / "scenarios"
+SAVES_DIR = ROOT / "saves"
+SAVE_FORMAT = "coc-trpg-skill-save"
+SAVE_VERSION = 1
 
 
 EMPTY_MEMORY = {
@@ -33,6 +37,7 @@ EMPTY_MEMORY = {
         "boundaries": "",
         "created_at": "",
         "updated_at": "",
+        "last_save_at": "",
     },
     "public": {
         "recap": [],
@@ -55,6 +60,21 @@ EMPTY_MEMORY = {
         "countdowns": [],
         "foreshadowing": [],
     },
+    "scenario": {
+        "premise": [],
+        "acts": [],
+        "scene_nodes": [],
+        "clue_web": [],
+        "npc_functions": [],
+        "threat_clock": [],
+        "endings": [],
+        "continuity": [],
+    },
+    "resume": {
+        "updated_at": "",
+        "public": "",
+        "keeper": "",
+    },
 }
 
 
@@ -76,6 +96,15 @@ SECTION_MAP = {
     "hidden-san": ("keeper", "hidden_san"),
     "countdown": ("keeper", "countdowns"),
     "foreshadowing": ("keeper", "foreshadowing"),
+    "scenario": ("scenario", "premise"),
+    "outline": ("scenario", "premise"),
+    "act": ("scenario", "acts"),
+    "scene-node": ("scenario", "scene_nodes"),
+    "clue-web": ("scenario", "clue_web"),
+    "npc-function": ("scenario", "npc_functions"),
+    "threat-clock": ("scenario", "threat_clock"),
+    "ending": ("scenario", "endings"),
+    "continuity": ("scenario", "continuity"),
 }
 
 
@@ -106,6 +135,12 @@ def memory_paths(name):
     return SCENARIOS_DIR / f"{slug}_memory.json", SCENARIOS_DIR / f"{slug}_memory.md"
 
 
+def default_save_path(name):
+    slug = slugify(name)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return SAVES_DIR / f"{slug}_{stamp}.cocsave.json"
+
+
 class MemoryLock:
     def __init__(self, name):
         self.path = SCENARIOS_DIR / f".{slugify(name)}_memory.lock"
@@ -130,7 +165,26 @@ def load_memory(name):
     if not json_path.exists():
         raise SystemExit(f"找不到记忆文件: {json_path}")
     with json_path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        return normalize_memory(json.load(f))
+
+
+def merge_defaults(default, value):
+    if isinstance(default, dict):
+        result = deepcopy(default)
+        if isinstance(value, dict):
+            for key, item in value.items():
+                result[key] = merge_defaults(default.get(key), item)
+        return result
+    return deepcopy(value) if value is not None else deepcopy(default)
+
+
+def normalize_memory(memory):
+    return merge_defaults(EMPTY_MEMORY, memory)
+
+
+def memory_checksum(memory):
+    payload = json.dumps(memory, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def save_memory(memory):
@@ -149,6 +203,159 @@ def save_memory(memory):
     return json_path, md_path
 
 
+def write_save_file(memory, output_path, force=False):
+    output_path = Path(output_path).expanduser()
+    if not output_path.is_absolute():
+        output_path = ROOT / output_path
+    if output_path.exists() and not force:
+        raise SystemExit(f"存档已存在: {output_path}。如需覆盖，请加 --force。")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    exported_at = now()
+    memory_copy = normalize_memory(deepcopy(memory))
+    memory_copy["meta"]["last_save_at"] = exported_at
+    memory_copy["resume"] = build_resume(memory_copy, exported_at)
+    save_data = {
+        "format": SAVE_FORMAT,
+        "version": SAVE_VERSION,
+        "exported_at": exported_at,
+        "resume": memory_copy["resume"],
+        "checksum": memory_checksum(memory_copy),
+        "memory": memory_copy,
+    }
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
+        json.dump(save_data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    tmp_path.replace(output_path)
+    return output_path, save_data
+
+
+def read_save_file(path):
+    save_path = Path(path).expanduser()
+    if not save_path.is_absolute():
+        save_path = ROOT / save_path
+    if not save_path.exists():
+        raise SystemExit(f"找不到存档文件: {save_path}")
+    with save_path.open("r", encoding="utf-8") as f:
+        save_data = json.load(f)
+    if save_data.get("format") != SAVE_FORMAT:
+        raise SystemExit("存档格式不正确，不是 coc-trpg-skill 存档。")
+    if save_data.get("version") != SAVE_VERSION:
+        raise SystemExit(f"不支持的存档版本: {save_data.get('version')}")
+    raw_memory = save_data.get("memory")
+    if not isinstance(raw_memory, dict):
+        raise SystemExit("存档缺少 memory 数据。")
+    expected = save_data.get("checksum")
+    raw_checksum = memory_checksum(raw_memory)
+    memory = normalize_memory(raw_memory)
+    normalized_checksum = memory_checksum(memory)
+    if expected and expected not in {raw_checksum, normalized_checksum}:
+        raise SystemExit("存档校验失败，文件可能被改动或复制损坏。")
+    return memory, save_path
+
+
+def section_text(items, empty="（暂无记录）"):
+    return "\n".join(f"- {item}" for item in items) if items else f"- {empty}"
+
+
+def build_resume(memory, exported_at):
+    meta = memory["meta"]
+    public = memory["public"]
+    keeper = memory["keeper"]
+    scenario = memory["scenario"]
+    title = meta.get("campaign") or "COC 跑团"
+
+    public_resume = f"""# {title} - 续跑摘要（玩家可知）
+
+## 当前落点
+
+- 时代：{meta.get('era') or '未记录'}
+- 当前时间：{meta.get('current_time') or '未记录'}
+- 当前地点：{meta.get('current_location') or '未记录'}
+- 当前场景：{meta.get('current_scene') or '未记录'}
+- 玩家角色：{meta.get('player_characters') or '未记录'}
+- Keeper 风格：{meta.get('keeper_style') or '未记录'}
+
+## 已进行流程
+
+{section_text(public.get('timeline') or public.get('recap'))}
+
+## 主角与重要关系
+
+{section_text(public.get('protagonist_anchor') + public.get('cast_anchor'))}
+
+## 当前状况与调查员状态
+
+{section_text(public.get('current_situation') + public.get('investigator_status'))}
+
+## 已知线索
+
+{section_text(public.get('known_clues'))}
+
+## NPC、地点与物品
+
+{section_text(public.get('npc_status') + public.get('locations') + public.get('items'))}
+
+## 未解决问题
+
+{section_text(public.get('open_questions'))}
+
+## 续跑入口
+
+- 导入后先用玩家可知信息做极短“上回回顾”。
+- 从“当前场景”继续，不要重开剧情。
+- 回顾后给 2-4 个可行动选项，并允许玩家自由行动。
+"""
+
+    keeper_resume = f"""# {title} - Keeper 续跑摘要
+
+## 幕后真相与秘密
+
+{section_text(keeper.get('truth') + keeper.get('secret_notes'))}
+
+## 暗骰与隐藏 SAN
+
+{section_text(keeper.get('hidden_rolls') + keeper.get('hidden_san'))}
+
+## 倒计时、敌方行动与伏笔
+
+{section_text(keeper.get('countdowns') + keeper.get('foreshadowing'))}
+
+## 剧本连续性
+
+### 核心设定与分幕
+
+{section_text(scenario.get('premise') + scenario.get('acts'))}
+
+### 场景节点与线索网络
+
+{section_text(scenario.get('scene_nodes') + scenario.get('clue_web'))}
+
+### NPC 剧本功能、威胁时钟与结局条件
+
+{section_text(scenario.get('npc_functions') + scenario.get('threat_clock') + scenario.get('endings'))}
+
+### 连续性备注
+
+{section_text(scenario.get('continuity'))}
+
+## 续跑前必须核对
+
+- 当前时间、地点、同行者与调查员状态是否一致。
+- 已知线索不要混入 Keeper Only 真相。
+- 未结算暗骰、隐藏 SAN、延迟公开 SAN、倒计时需要先处理或继续挂起。
+- NPC 的真实动机、态度和当前位置不能和上一轮冲突。
+- 剧本当前节点必须能接回核心设定、线索网络、威胁时钟和可能结局。
+- 若当前摘要缺少核心真相、线索链、场景节点或倒计时，继续前先补写记忆再推进。
+"""
+
+    return {
+        "updated_at": exported_at,
+        "public": public_resume.strip() + "\n",
+        "keeper": keeper_resume.strip() + "\n",
+    }
+
+
 def bullet_list(items):
     if not items:
         return "- （暂无）"
@@ -159,6 +366,8 @@ def render_markdown(memory):
     meta = memory["meta"]
     public = memory["public"]
     keeper = memory["keeper"]
+    scenario = memory["scenario"]
+    resume = memory.get("resume", {})
     return f"""# {meta.get('campaign') or 'COC 跑团'} - 战役记忆
 
 > 玩家可知信息可以回顾；Keeper 记忆不要直接展示给玩家。
@@ -175,8 +384,17 @@ def render_markdown(memory):
 | 玩家角色 | {meta.get('player_characters', '')} |
 | Keeper 风格 | {meta.get('keeper_style', '')} |
 | 内容边界 | {meta.get('boundaries', '')} |
+| 最近存档 | {meta.get('last_save_at', '')} |
 | 创建时间 | {meta.get('created_at', '')} |
 | 更新时间 | {meta.get('updated_at', '')} |
+
+## 续跑摘要（玩家可知）
+
+{resume.get('public') or '- （下次存档时自动生成）'}
+
+## Keeper 续跑摘要（不要直接展示给玩家）
+
+{resume.get('keeper') or '- （下次存档时自动生成）'}
 
 ## 上回回顾（玩家可知）
 
@@ -221,6 +439,40 @@ def render_markdown(memory):
 ## 时间线
 
 {bullet_list(public.get('timeline', []))}
+
+## 剧本连续性记忆（Keeper）
+
+### 核心设定 / 剧本前提
+
+{bullet_list(scenario.get('premise', []))}
+
+### 分幕与结构
+
+{bullet_list(scenario.get('acts', []))}
+
+### 场景节点
+
+{bullet_list(scenario.get('scene_nodes', []))}
+
+### 线索网络
+
+{bullet_list(scenario.get('clue_web', []))}
+
+### NPC 剧本功能
+
+{bullet_list(scenario.get('npc_functions', []))}
+
+### 威胁时钟
+
+{bullet_list(scenario.get('threat_clock', []))}
+
+### 结局条件
+
+{bullet_list(scenario.get('endings', []))}
+
+### 剧本连续性备注
+
+{bullet_list(scenario.get('continuity', []))}
 
 ## Keeper 记忆（不要直接展示给玩家）
 
@@ -298,12 +550,20 @@ def cmd_recall(args):
     meta = memory["meta"]
     public = memory["public"]
     keeper = memory["keeper"]
+    scenario = memory["scenario"]
+    resume = memory.get("resume", {})
 
     print(f"# 记忆回忆: {meta.get('campaign')}")
     print(f"- 时间: {meta.get('current_time') or '未记录'}")
     print(f"- 地点: {meta.get('current_location') or '未记录'}")
     print(f"- 场景: {meta.get('current_scene') or '未记录'}")
     print(f"- 角色: {meta.get('player_characters') or '未记录'}")
+    if resume.get("public"):
+        print("\n## 续跑摘要（玩家可知）")
+        print(resume["public"].strip())
+    if args.keeper and resume.get("keeper"):
+        print("\n## Keeper 续跑摘要（不要直接展示给玩家）")
+        print(resume["keeper"].strip())
     print("\n## 玩家可知")
     for key in [
         "recap", "protagonist_anchor", "cast_anchor", "current_situation", "investigator_status", "known_clues",
@@ -314,6 +574,12 @@ def cmd_recall(args):
         print(bullet_list(public.get(key, [])))
 
     if args.keeper:
+        print("\n## 剧本连续性记忆（Keeper）")
+        for key in ["premise", "acts", "scene_nodes", "clue_web", "npc_functions", "threat_clock", "endings", "continuity"]:
+            title = key.replace("_", " ")
+            print(f"\n### {title}")
+            print(bullet_list(scenario.get(key, [])))
+
         print("\n## Keeper 记忆（不要直接展示给玩家）")
         for key in ["truth", "secret_notes", "hidden_rolls", "hidden_san", "countdowns", "foreshadowing"]:
             title = key.replace("_", " ")
@@ -357,6 +623,42 @@ def cmd_render(args):
     print(f"JSON: {json_path}")
 
 
+def cmd_save(args):
+    with MemoryLock(args.name):
+        memory = load_memory(args.name)
+        output_path = args.output or default_save_path(args.name)
+        save_path, save_data = write_save_file(memory, output_path, force=args.force)
+        memory["meta"]["last_save_at"] = save_data["exported_at"]
+        memory["resume"] = save_data["resume"]
+        save_memory(memory)
+    print(f"已导出可迁移存档: {save_path}")
+    print(f"团名: {save_data['memory']['meta'].get('campaign')}")
+    print(f"导出时间: {save_data['exported_at']}")
+    print(f"校验值: {save_data['checksum']}")
+    print("已生成续跑摘要: public + keeper + scenario")
+    print("将这个 .cocsave.json 文件复制到另一台电脑后，可用 load 命令继续游玩。")
+
+
+def cmd_load(args):
+    memory, save_path = read_save_file(args.file)
+    original_name = memory.get("meta", {}).get("campaign") or "campaign"
+    target_name = args.name or original_name
+    memory["meta"]["campaign"] = target_name
+    resume_time = memory.get("resume", {}).get("updated_at") or memory["meta"].get("last_save_at") or now()
+    memory["resume"] = build_resume(memory, resume_time)
+    with MemoryLock(target_name):
+        json_path, _ = memory_paths(target_name)
+        if json_path.exists() and not args.force:
+            raise SystemExit(f"目标记忆已存在: {json_path}。如需覆盖，请加 --force。")
+        json_path, md_path = save_memory(memory)
+    print(f"已导入存档: {save_path}")
+    print(f"原团名: {original_name}")
+    print(f"当前团名: {target_name}")
+    print(f"JSON: {json_path}")
+    print(f"Markdown: {md_path}")
+    print("导入后可用 recall --keeper 回忆当前进度。")
+
+
 def main():
     parser = argparse.ArgumentParser(description="COC 跑团记忆工具")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -396,6 +698,18 @@ def main():
     render_p = sub.add_parser("render", help="刷新 Markdown 导出")
     render_p.add_argument("--name", required=True, help="团名或模组名")
     render_p.set_defaults(func=cmd_render)
+
+    save_p = sub.add_parser("save", help="导出可迁移存档")
+    save_p.add_argument("--name", required=True, help="团名或模组名")
+    save_p.add_argument("--output", default="", help="输出路径，默认保存到 saves/<团名>_<时间>.cocsave.json")
+    save_p.add_argument("--force", action="store_true", help="覆盖同名存档")
+    save_p.set_defaults(func=cmd_save)
+
+    load_p = sub.add_parser("load", help="导入可迁移存档")
+    load_p.add_argument("--file", required=True, help=".cocsave.json 存档路径")
+    load_p.add_argument("--name", default="", help="导入后使用的新团名；默认沿用存档团名")
+    load_p.add_argument("--force", action="store_true", help="覆盖已有同名记忆")
+    load_p.set_defaults(func=cmd_load)
 
     args = parser.parse_args()
     args.func(args)
