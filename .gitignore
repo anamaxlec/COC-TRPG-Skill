@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Output directories (keep structure, user content is local)
+characters/*
+scenarios/*
+npcs/*
+saves/*
+!characters/.gitkeep
+!scenarios/.gitkeep
+!npcs/.gitkeep
+!saves/.gitkeep
+!characters/README.md
+!scenarios/README.md
+!npcs/README.md
+!saves/README.md
+
+# OS files
+.DS_Store
+Thumbs.db
