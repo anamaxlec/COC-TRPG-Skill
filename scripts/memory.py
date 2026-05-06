@@ -35,6 +35,7 @@ EMPTY_MEMORY = {
         "player_characters": "",
         "keeper_style": "",
         "boundaries": "",
+        "next_hook": "",
         "created_at": "",
         "updated_at": "",
         "last_save_at": "",
@@ -59,6 +60,7 @@ EMPTY_MEMORY = {
         "hidden_san": [],
         "countdowns": [],
         "foreshadowing": [],
+        "unresolved": [],
     },
     "scenario": {
         "premise": [],
@@ -96,6 +98,7 @@ SECTION_MAP = {
     "hidden-san": ("keeper", "hidden_san"),
     "countdown": ("keeper", "countdowns"),
     "foreshadowing": ("keeper", "foreshadowing"),
+    "unresolved": ("keeper", "unresolved"),
     "scenario": ("scenario", "premise"),
     "outline": ("scenario", "premise"),
     "act": ("scenario", "acts"),
@@ -117,6 +120,7 @@ META_FIELDS = {
     "characters": "player_characters",
     "style": "keeper_style",
     "boundaries": "boundaries",
+    "hook": "next_hook",
 }
 
 
@@ -275,6 +279,7 @@ def build_resume(memory, exported_at):
 - 当前场景：{meta.get('current_scene') or '未记录'}
 - 玩家角色：{meta.get('player_characters') or '未记录'}
 - Keeper 风格：{meta.get('keeper_style') or '未记录'}
+- 下一轮开场钩子：{meta.get('next_hook') or '未记录'}
 
 ## 已进行流程
 
@@ -304,6 +309,8 @@ def build_resume(memory, exported_at):
 
 - 导入后先用玩家可知信息做极短“上回回顾”。
 - 从“当前场景”继续，不要重开剧情。
+- 沿用 Keeper 风格：{meta.get('keeper_style') or '平衡 Keeper'}。
+- 优先处理下一轮钩子：{meta.get('next_hook') or '根据当前场景给出直接行动切口'}。
 - 回顾后给 2-4 个可行动选项，并允许玩家自由行动。
 """
 
@@ -316,6 +323,10 @@ def build_resume(memory, exported_at):
 ## 暗骰与隐藏 SAN
 
 {section_text(keeper.get('hidden_rolls') + keeper.get('hidden_san'))}
+
+## 未结算事项
+
+{section_text(keeper.get('unresolved'))}
 
 ## 倒计时、敌方行动与伏笔
 
@@ -346,6 +357,8 @@ def build_resume(memory, exported_at):
 - 未结算暗骰、隐藏 SAN、延迟公开 SAN、倒计时需要先处理或继续挂起。
 - NPC 的真实动机、态度和当前位置不能和上一轮冲突。
 - 剧本当前节点必须能接回核心设定、线索网络、威胁时钟和可能结局。
+- 先恢复 Keeper 风格：{meta.get('keeper_style') or '平衡 Keeper'}。
+- 本轮开场钩子：{meta.get('next_hook') or '未记录；从当前场景直接给行动切口'}。
 - 若当前摘要缺少核心真相、线索链、场景节点或倒计时，继续前先补写记忆再推进。
 """
 
@@ -384,6 +397,7 @@ def render_markdown(memory):
 | 玩家角色 | {meta.get('player_characters', '')} |
 | Keeper 风格 | {meta.get('keeper_style', '')} |
 | 内容边界 | {meta.get('boundaries', '')} |
+| 下一轮开场钩子 | {meta.get('next_hook', '')} |
 | 最近存档 | {meta.get('last_save_at', '')} |
 | 创建时间 | {meta.get('created_at', '')} |
 | 更新时间 | {meta.get('updated_at', '')} |
@@ -492,6 +506,10 @@ def render_markdown(memory):
 
 {bullet_list(keeper.get('hidden_san', []))}
 
+### 未结算事项
+
+{bullet_list(keeper.get('unresolved', []))}
+
 ### 倒计时与敌方行动
 
 {bullet_list(keeper.get('countdowns', []))}
@@ -507,6 +525,7 @@ def render_markdown(memory):
 - [ ] 玩家已知线索没有混入 Keeper Only 真相。
 - [ ] NPC 位置、态度、秘密一致。
 - [ ] 暗骰、延迟 SAN、倒计时、追踪者已记录。
+- [ ] Keeper 风格和下一轮开场钩子已记录。
 """
 
 
@@ -524,6 +543,7 @@ def cmd_init(args):
             "player_characters": args.characters or "",
             "keeper_style": args.style or "",
             "boundaries": args.boundaries or "",
+            "next_hook": args.hook or "",
             "created_at": now(),
             "updated_at": now(),
         })
@@ -558,6 +578,8 @@ def cmd_recall(args):
     print(f"- 地点: {meta.get('current_location') or '未记录'}")
     print(f"- 场景: {meta.get('current_scene') or '未记录'}")
     print(f"- 角色: {meta.get('player_characters') or '未记录'}")
+    print(f"- Keeper 风格: {meta.get('keeper_style') or '平衡 Keeper'}")
+    print(f"- 下一轮开场钩子: {meta.get('next_hook') or '未记录'}")
     if resume.get("public"):
         print("\n## 续跑摘要（玩家可知）")
         print(resume["public"].strip())
@@ -581,7 +603,7 @@ def cmd_recall(args):
             print(bullet_list(scenario.get(key, [])))
 
         print("\n## Keeper 记忆（不要直接展示给玩家）")
-        for key in ["truth", "secret_notes", "hidden_rolls", "hidden_san", "countdowns", "foreshadowing"]:
+        for key in ["truth", "secret_notes", "hidden_rolls", "hidden_san", "unresolved", "countdowns", "foreshadowing"]:
             title = key.replace("_", " ")
             print(f"\n### {title}")
             print(bullet_list(keeper.get(key, [])))
@@ -591,6 +613,8 @@ def cmd_recall(args):
     print("- 核对 HP/SAN/MP/状态/物品。")
     print("- 不要把 Keeper 记忆直接说给玩家。")
     print("- 结算未处理的暗骰、延迟 SAN、倒计时。")
+    print("- 沿用 Keeper 风格；若有下一轮开场钩子，先从该钩子切入。")
+    print("- 本轮建议: 极短玩家可知回顾 -> 当前场景行动结算 -> 2-4 个行动切口。")
 
 
 def cmd_set(args):
@@ -671,6 +695,7 @@ def main():
     init_p.add_argument("--characters", default="", help="玩家角色")
     init_p.add_argument("--style", default="", help="Keeper 风格")
     init_p.add_argument("--boundaries", default="", help="内容边界")
+    init_p.add_argument("--hook", default="", help="下一轮开场钩子")
     init_p.add_argument("--recap", default="", help="初始回顾")
     init_p.add_argument("--force", action="store_true", help="覆盖已有记忆")
     init_p.set_defaults(func=cmd_init)
