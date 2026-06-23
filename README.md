@@ -19,6 +19,17 @@
 - **🎩 NPC 与模组模板**：支持公开身份、隐藏动机、线索、误导点、逼问反应和离场替代方案。
 - **🧰 轻量无依赖**：Python 脚本仅使用标准库。
 
+## 🆕 本版本更新：v2 记忆系统
+
+本版本重建了长期跑团记忆系统，重点保证续团时能恢复当前场景、调查员状态、线索网络、NPC 动向、未结算事项、威胁时钟和 Keeper Only 真相。
+
+- **新的 v2 结构**：记忆拆分为 `meta`、`current`、`journal`、`state`、`clues`、`threads`、`clocks` 和 `summaries`，既保留事件流水，也沉淀当前可用状态。
+- **自动沉淀命令**：新增 `record`、`set-current`、`entity`、`clue`、`thread`、`clock`、`snapshot`，方便 Agent 在关键节点自动写入，而不是只追加松散文本。
+- **玩家/Keeper 隔离**：默认 `recall` 只输出玩家可知摘要；只有 `--keeper` 才会显示幕后真相、暗骰、隐藏 SAN 和敌方行动。
+- **跨平台数据目录**：macOS/Linux 默认写入 `~/.codex/data/coc-trpg-skill`，Windows 默认写入 `%APPDATA%\coc-trpg-skill`，避免把长期团资料混进 skill 安装目录。
+- **旧数据归档**：旧 v1 的 `scenarios/` 和 `saves/` 不自动迁移，可用 `python scripts/memory.py archive-legacy` 复制到归档目录。
+- **测试覆盖**：新增标准库 `unittest`，覆盖 v2 初始化、写入、快照、导入、public/keeper 隔离、数据目录和旧数据归档。
+
 ## 📦 项目结构
 
 ```text
@@ -136,26 +147,30 @@ python scripts/dice.py --pregen --era modern --occupation 记者 --region cn --f
 ### `scripts/memory.py`
 
 ```bash
-# 创建新跑团记忆
+# 创建 v2 跑团记忆
 python scripts/memory.py init \
   --name "榕渊" \
   --era "modern" \
   --location "福州" \
+  --scene "旧仓山洋楼" \
   --characters "林知远" \
   --style "平衡 Keeper"
 
-# 保存 KP 风格和下一轮开场钩子
-python scripts/memory.py set --name "榕渊" --field style --value "玩家自定义：慢热、少讲规则、暗骰优先"
-python scripts/memory.py set --name "榕渊" --field hook --value "从旧仓山洋楼二层的潮湿手印继续"
+# 自动沉淀关键状态
+python scripts/memory.py record --name "榕渊" --visibility public --kind scene --text "调查员进入旧仓山洋楼。"
+python scripts/memory.py record --name "榕渊" --visibility keeper --kind note --text "墙内有未公开的仪式残留。"
+python scripts/memory.py entity --name "榕渊" --type investigator --entity "林知远" --status "HP 12 SAN 50" --public "携带相机和旧报纸"
+python scripts/memory.py clue --name "榕渊" --id C-001 --text "二层门把手有潮湿手印" --source "洋楼二层" --points-to "有人刚离开" --visibility public
+python scripts/memory.py thread --name "榕渊" --type unresolved --visibility keeper --text "延迟公开 SAN 1 点" --next "真相揭露时结算"
+python scripts/memory.py clock --name "榕渊" --clock "仪式推进" --progress "1/4" --next "调查员拖延时推进"
 
-# 追加未结算事项
-python scripts/memory.py add --name "榕渊" --section unresolved --text "延迟公开 SAN 1 点，真相揭露时结算"
-
-# 续团、存档、读档
+# 续团、快照、导入导出
 python scripts/memory.py recall --name "榕渊" --keeper
-python scripts/memory.py save --name "榕渊"
+python scripts/memory.py snapshot --name "榕渊"
 python scripts/memory.py load --file "saves/<存档名>.cocsave.json"
 ```
+
+`memory.py` 默认数据目录：macOS/Linux 为 `~/.codex/data/coc-trpg-skill`，Windows 为 `%APPDATA%\coc-trpg-skill`。可用 `COC_TRPG_DATA_DIR` 或 `--data-dir` 覆盖。旧 v1 `scenarios/` 和 `saves/` 可用 `python scripts/memory.py archive-legacy` 归档。
 
 ### 随机素材
 
@@ -171,7 +186,7 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 | 文件 | 用途 |
 |---|---|
 | `references/keeper_style.md` | KP 风格、短输入处理、自定义风格 |
-| `references/memory_playbook.md` | 记忆触发、续团、存档前检查 |
+| `references/memory_playbook.md` | v2 记忆触发、续团、自动写入命令 |
 | `references/checks_and_san.md` | D100、暗骰、SAN |
 | `references/scenario_design.md` | 模组、场景节点、线索网 |
 | `references/character_npc.md` | 车卡、职业、NPC |

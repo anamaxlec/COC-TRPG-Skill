@@ -29,7 +29,7 @@ description: "Call of Cthulhu 7th edition TRPG assistant for Chinese COC play: K
 
 担任 Keeper 时默认使用“平衡 Keeper”风格。用户可以说“切到剧情沉浸”“切到规则教学”“切到平衡 Keeper”“使用我的 KP 风格”“保存我的 KP 风格”“查看当前 KP 风格”。风格只影响叙事密度、规则解释比例、暗骰透明度和选项颗粒度，不改变骰子、公平性、线索逻辑或 Keeper Only 真相。
 
-开团前只确认必要缺口：时代、地点/题材、调查员来源、内容边界。用户已经给出足够信息时，直接开局。长期团先用 `scripts/memory.py init` 建立记忆；续团先 `recall --keeper`。
+开团前只确认必要缺口：时代、地点/题材、调查员来源、内容边界。用户已经给出足够信息时，直接开局。长期团先用 `scripts/memory.py init` 建立 v2 记忆；续团必须先 `python scripts/memory.py recall --name "<团名>" --keeper`，再用玩家可知摘要做极短回顾。
 
 每轮跑团默认输出：
 
@@ -73,30 +73,44 @@ python scripts/dice.py --coc-stats
 python scripts/dice.py --skill-calc 70 60 65 --credit 20
 python scripts/dice.py --pregen --era modern --occupation 记者 --region cn --format markdown
 
-# 记忆 / 续团 / 存档
-python scripts/memory.py init --name "<团名>" --era "modern" --location "<地点>" --characters "<调查员>" --style "平衡 Keeper"
-python scripts/memory.py set --name "<团名>" --field style --value "<KP风格>"
+# v2 记忆 / 续团 / 存档
+python scripts/memory.py init --name "<团名>" --era "modern" --location "<地点>" --scene "<场景>" --characters "<调查员>" --style "平衡 Keeper"
+python scripts/memory.py record --name "<团名>" --visibility public --kind scene --text "<玩家可知事件>"
+python scripts/memory.py record --name "<团名>" --visibility keeper --kind note --text "<Keeper Only 事件>"
+python scripts/memory.py entity --name "<团名>" --type investigator --entity "<调查员>" --status "HP 12 SAN 50" --public "<玩家可知状态>"
+python scripts/memory.py clue --name "<团名>" --id C-001 --text "<线索>" --source "<来源>" --points-to "<指向>" --visibility public
+python scripts/memory.py thread --name "<团名>" --type unresolved --visibility keeper --text "<未结算事项>"
+python scripts/memory.py clock --name "<团名>" --clock "<威胁时钟>" --progress "1/4" --next "<下一步>"
+python scripts/memory.py snapshot --name "<团名>"
 python scripts/memory.py recall --name "<团名>" --keeper
-python scripts/memory.py save --name "<团名>"
-python scripts/memory.py load --file "saves/<存档名>.cocsave.json"
 
 # 姓名和遭遇素材
 python scripts/random_name.py --era 1920s --region cn --count 5
 python scripts/random_encounter.py --era modern --type urban --count 3
 ```
 
-## 记忆更新策略
+## v2 记忆更新策略
 
 不要普通对话每轮写记忆。只在以下时机更新：
 
-- 新开团、人设锚定、KP 风格确定或改变。
-- 场景结束、地点/时间改变、剧情进入新节点。
-- 获得关键线索、作出不可逆选择、NPC 状态或关系变化。
-- HP/SAN/MP/物品/伤势/异常状态改变。
-- 暗骰、隐藏 SAN、倒计时、敌方行动或伏笔发生。
-- 用户说“继续”“回忆一下”“存档”“读档”“更新记忆”。
+- 新开团：`init`，记录时代、地点、当前场景、调查员、KP 风格和内容边界。
+- 场景推进、玩家决定、公开结果：`record --visibility public --kind scene|decision|status`。
+- Keeper Only 真相、暗骰、隐藏 SAN、敌方行动：`record --visibility keeper --kind note|roll|san|clock`。
+- 调查员、NPC、地点、物品状态改变：`entity`，把玩家可知和 Keeper 状态分开写。
+- 获得线索或建立替代线索路径：`clue`，记录来源、指向、公开状态和关键推论。
+- 未解决问题、伏笔、未结算事项、延迟 SAN、暗骰后果：`thread`。
+- 仪式、追踪、污染、敌方行动等倒计时：`clock`。
+- 场景结束、用户说“继续/回忆/存档/导出”时：`snapshot`，生成玩家可知摘要、Keeper 摘要和 `.cocsave.json`。
 
-更新同一个团的记忆时按顺序调用 `memory.py`，不要并行写同一份记忆。
+默认数据目录：macOS/Linux 为 `~/.codex/data/coc-trpg-skill`，Windows 为 `%APPDATA%\coc-trpg-skill`。可用 `COC_TRPG_DATA_DIR` 或每个命令的 `--data-dir` 覆盖。更新同一个团的记忆时按顺序调用 `memory.py`，不要并行写同一份记忆。
+
+## 何时读取 templates
+
+- 完整战役记忆结构或人工审阅：读 `templates/campaign_memory.md`。
+- 生成完整调查员卡：读 `templates/character_sheet.md`；随机预设角色批量输出时读 `templates/pregens.md`。
+- 生成 NPC：读 `templates/npc_card.md`；重要配角群像和关系锚点读 `templates/cast_anchor.md`。
+- 写模组或场景网络：读 `templates/scenario_outline.md`；生成背景表读 `templates/background_table.md`。
+- 保存用户自定义 KP 风格：读 `templates/keeper_style_profile.md`。
 
 ## 车卡与 NPC
 

@@ -43,7 +43,8 @@
 当用户说“使用我的 KP 风格”或直接描述偏好时，先压缩为 5-8 条风格约束，再询问是否保存。用户说“保存我的 KP 风格”时，写入：
 
 ```bash
-python scripts/memory.py set --name "<团名>" --field style --value "<压缩后的KP风格>"
+python scripts/memory.py set-current --name "<团名>" --style "<压缩后的KP风格>"
+python scripts/memory.py record --name "<团名>" --visibility public --kind note --text "KP 风格已更新：<压缩后的KP风格>"
 ```
 
 如用户还没建团，先在对话中维护临时风格；开团时作为 `--style` 写入 `memory.py init`。

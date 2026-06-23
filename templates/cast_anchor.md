@@ -77,7 +77,7 @@
 ## 写入记忆建议
 
 ```bash
-python scripts/memory.py add --name "<团名>" --section protagonist --text "<主角人设锚点>"
-python scripts/memory.py add --name "<团名>" --section cast --text "<NPC公开锚点>"
-python scripts/memory.py add --name "<团名>" --section secret --text "<NPC隐藏动机或秘密>"
+python scripts/memory.py entity --name "<团名>" --type investigator --entity "<主角>" --public "<主角人设锚点>"
+python scripts/memory.py entity --name "<团名>" --type npc --entity "<NPC>" --public "<NPC公开锚点>" --keeper "<NPC隐藏动机或秘密>"
+python scripts/memory.py thread --name "<团名>" --type foreshadowing --visibility keeper --text "<关系伏笔或待回收冲突>"
 ```
