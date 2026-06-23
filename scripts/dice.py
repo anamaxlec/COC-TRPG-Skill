@@ -4,6 +4,7 @@ COC 7版 骰子与预设调查员工具
 支持：D100检定、属性生成、武器伤害、SAN检定、对抗检定、快速车卡。
 """
 import argparse
+import math
 import random
 import re
 
@@ -150,6 +151,8 @@ def d100_check(skill, bonus=0, penalty=0):
 
     if result == 1:
         level = "大成功 CRITICAL"
+    elif result == 100:
+        level = "大失败 FUMBLE"
     elif result <= skill // 5:
         level = "极难成功 EXTREME"
     elif result <= skill // 2:
@@ -157,8 +160,6 @@ def d100_check(skill, bonus=0, penalty=0):
     elif result <= skill:
         level = "常规成功 REGULAR"
     elif result >= 96 and skill < 50:
-        level = "大失败 FUMBLE"
-    elif result == 100:
         level = "大失败 FUMBLE"
     else:
         level = "失败 FAIL"
@@ -261,7 +262,8 @@ def san_check(current_san, loss_expr):
     if loss >= 5:
         output.append("单次损失 >= 5 -> 临时疯狂 (1D10 小时)")
         output.append(f"疯狂表现: D10 = {RNG.randint(1, 10)} (查临时疯狂表)")
-    if current_san > 0 and loss >= current_san // 5:
+    indefinite_threshold = math.ceil(current_san / 5) if current_san > 0 else 0
+    if loss > 0 and indefinite_threshold > 0 and loss >= indefinite_threshold:
         output.append("单次损失 >= SAN/5 -> 不定疯狂 (持续到剧情解决)")
     if new_san <= 0:
         output.append("SAN 归零 -> 永久疯狂 (角色通常转为 NPC)")

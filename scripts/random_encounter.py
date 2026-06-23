@@ -92,6 +92,35 @@ MODERN_URBAN = [
     "你深夜加班，电脑自动打开记事本，一行行地写：「我就在你们中间」",
 ]
 
+MODERN_URBAN_NPC = [
+    "一名深夜值班保安，坚称自己刚才在监控里看见了十分钟前的你。",
+    "一位外卖骑手，手机导航反复把他带回同一栋没有门牌的楼。",
+    "一个疲惫的程序员，随身电脑里不断弹出不存在的系统日志。",
+    "一名短视频主播，直播间观众都在刷同一句话：『别让他回头』。",
+    "一位心理咨询师，接连收到多个病人描述同一个梦境地点。",
+    "一名物业经理，手里拿着一串找不到对应房门的钥匙。",
+]
+
+MODERN_RURAL = [
+    "村口新装的路灯每晚三点同时熄灭，只有祠堂门前那盏会亮起蓝白色的光。",
+    "废弃水库边的警示牌被人翻到背面，上面新写着一串当天日期和陌生姓名。",
+    "山里没有信号，但你的手机收到一条本村定位发来的语音，背景里有人在敲木鱼。",
+    "老宅院墙外的野草一夜之间全部倒伏，像被什么巨大的东西贴地拖过。",
+    "村广播在停电后仍然响起，反复播放十年前已经取消的寻人启事。",
+    "返乡路上，导航把你带到一条没有铺装的老路；路尽头停着一辆与你车牌相同的车。",
+    "鱼塘里的水位没有变化，但塘底露出一排旧屋瓦，像整座房子沉在下面。",
+    "祠堂族谱多出一页新纸，墨迹未干，上面写着还活着的人的卒年。",
+]
+
+MODERN_RURAL_NPC = [
+    "一位村医，最近开始把每个病人的脉象记成潮汐时间。",
+    "一个返乡大学生，声称夜里听见山上传来自己小时候的哭声。",
+    "一名民宿老板，反复确认客人是否真的只有你一个人。",
+    "一位沉默的护林员，背包里装着湿透的红绳和三部没电的手机。",
+    "一个守祠老人，只愿意在正午之前回答问题。",
+    "一名快递站老板，手里压着一件寄给已故村民的包裹。",
+]
+
 
 def generate_encounter(era, enc_type):
     """生成随机遭遇"""
@@ -109,8 +138,12 @@ def generate_encounter(era, enc_type):
         scene = random.choice(URBAN_1890s)
         npc = random.choice(URBAN_1890s_NPC)
     elif era == "modern":
-        scene = random.choice(MODERN_URBAN)
-        npc = "（NPC由Keeper即兴发挥）"
+        if enc_type == "rural":
+            scene = random.choice(MODERN_RURAL)
+            npc = random.choice(MODERN_RURAL_NPC)
+        else:
+            scene = random.choice(MODERN_URBAN)
+            npc = random.choice(MODERN_URBAN_NPC)
     else:
         scene = random.choice(URBAN_1920s)
         npc = random.choice(URBAN_1920s_NPC)
