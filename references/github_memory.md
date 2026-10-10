@@ -1,28 +1,32 @@
 # GitHub 记忆存档
 
-用自己的 fork 保存团档，换电脑后下载继续。也可以指定一个已经创建的独立私有仓库。Python 使用标准库，联网同步另需 Git；认证使用现有 Git 凭据或 SSH，不在 skill、团档或对话里保存 Token。
+推荐用独立私有仓库保存完整团档，换电脑后下载继续。Skill 安装与团档仓库分别配置，安装可以直接 clone 本项目。Python 使用标准库，联网同步另需 Git；认证使用现有 Git 凭据或 SSH，不在 skill、团档或对话里保存 Token。
 
 ## 存储与公开范围
 
-- skill 代码留在 `main`；完整 v2 团档放在独立的 `coc-saves` 分支，每团一个 `saves/<团名>.cocsave.json`，历史由 Git 保存。
+- 完整 v2 团档放在目标存档库的 `coc-saves` 分支，每团一个 `saves/<团名>.cocsave.json`，历史由 Git 保存；skill 代码单独安装和更新。
 - 完整团档包含玩家状态、Keeper 秘密、全部剧情、内容边界和 NPC 动机。`public/keeper` 只控制回顾输出，不加密文件。
 - **公开 fork 的所有分支均公开。** 要保密，应使用独立私有仓库，不能靠新分支或把公开 fork 改为私有来保密。参见 [GitHub fork 可见性说明](https://docs.github.com/en/pull-requests/reference/forks)。上传后删除文件也不能抹掉 Git 历史。
 - 配置和日常跑团仍在 `memory.py` 的数据目录；Git 缓存位于其中的 `github-cache/`，与 skill 安装目录分离。只上传点名的团档，不包含其他团、日志、锁文件或用户项目代码。
 
 ## 首次使用
 
-1. 在 GitHub 上 [fork 本项目](https://github.com/anamaxlec/COC-TRPG-Skill/fork)，或创建独立私有存档库。
-2. 安装本 skill，确保 Git 已配置提交身份和目标库写入权限。HTTPS 使用现有凭据管理器，SSH 使用已配置的 SSH 身份；脚本不会改变你的认证配置。
+1. 按 README 安装 skill，在 GitHub 创建独立私有存档库，例如 `COC-Saves`。
+2. 确保 Git 已配置提交身份和目标库写入权限。HTTPS 使用现有凭据管理器，SSH 使用已配置的 SSH 身份；脚本不会改变你的认证配置。
 3. 在 skill 目录运行（将 `你的用户名` 替换为实际用户名；`python` 须指向 Python 3）：
 
 ```bash
-python scripts/github_memory.py init --repo 你的用户名/COC-TRPG-Skill
+python scripts/github_memory.py init --repo 你的用户名/COC-Saves
 python scripts/github_memory.py status
 ```
 
 `init` 仅配置本地，不创建 GitHub 仓库、不上传、不验证远程权限。如果使用 SSH，在 `init` 后加 `--transport ssh`。未设置提交身份时，可在 `status` 显示的缓存目录配置 `git config user.name` 和 `git config user.email`，不用修改全局身份。邮箱会进入提交历史，可使用 GitHub 提供的 noreply 邮箱。
 
 `memory.py` 和 `github_memory.py` 支持相同的 `COC_TRPG_DATA_DIR` 和 `--data-dir`，须指向同一个目录。每个数据目录只关联一个目标仓库；更换仓库时使用另一个数据目录并导入需要的团档。
+
+## 使用公开 fork
+
+需要公开分享团档时，可以 [fork 本项目](https://github.com/anamaxlec/COC-TRPG-Skill/fork)，首次配置将 `--repo` 指向自己的 fork。选择前确认愿意公开完整剧情、人物秘密与内容边界；Agent 不能仅因发现安装目录的 Git remote 就把它设成存档目标。后续上传仍需 `--include-keeper`，按已授权的目标和范围执行。
 
 ## 上传当前团
 

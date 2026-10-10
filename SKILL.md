@@ -33,7 +33,7 @@ description: "协助中文 Call of Cthulhu 7e 跑团、选剧本、车卡、Keep
 
 用户说“剧本库”“推荐剧本”或点名现成模组时，先读 `references/scenario_library.md`。选本阶段只展示无剧透简介；确定剧本后读取该剧本的 Keeper 资料，按原作的真相、线索和结局备团。没有读到正文时，不凭标题编造剧情并声称在跑原作。
 
-每轮先结算玩家已声明的行动，再写可感知的变化，在下一个需要玩家决定的地方停下。用连贯叙事承载信息，不要求每轮四段标题。新手、玩家停滞或明确询问时，提供 2-4 个行动切口；自由行动的说明开团时说一次即可。
+每轮先结算玩家已声明的行动，再写可感知的变化，在下一个需要玩家决定的地方停下。NPC 向调查员提问、请求表态或发出需要回应的邀请时，停在等待玩家回答的位置。用连贯叙事承载信息，不要求每轮四段标题。新手、玩家停滞或明确询问时，提供 2-4 个行动切口；自由行动的说明开团时说一次即可。
 
 关键原则：
 
@@ -52,7 +52,7 @@ KP 风格细则、自定义风格模板和切换规则见 `references/keeper_sty
 
 - 跑团风格、短输入、人格化、暗骰透明度：读 `references/keeper_style.md`。
 - 续团、存档、记忆触发、长期团连续性：读 `references/memory_playbook.md`。
-- fork 仓库保存进度、GitHub 上传或换机恢复：读 `references/github_memory.md`。只有用户明确授权目标仓库和上传范围后才上传；普通“存档”只保存在本地。
+- GitHub 存档或换机恢复：读 `references/github_memory.md`，默认推荐独立私有存档库。只有用户明确授权目标仓库和上传范围后才上传；普通“存档”只保存在本地。
 - D100、奖励/惩罚骰、SAN、暗骰、伤害：读 `references/checks_and_san.md`。
 - 选剧本、内置中文模组、官方免费模组入口、按原作开团：读 `references/scenario_library.md`，确定剧本后再加载相应正文。
 - 写模组、场景节点、线索网、威胁时钟：读 `references/scenario_design.md`。
@@ -97,6 +97,7 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 不要普通对话每轮写记忆。只在以下时机更新：
 
 - 新开团：`init`，记录时代、地点、当前场景、调查员、KP 风格和内容边界。
+- 下一轮接续：`set-current --public-hook` 只写玩家已知的行动入口，`--keeper-hook` 写幕后安排；旧 `--hook` 按 Keeper 信息处理。
 - 场景推进、玩家决定、公开结果：`record --visibility public --kind scene|decision|status`。
 - Keeper Only 真相、暗骰、隐藏 SAN、敌方行动：`record --visibility keeper --kind note|roll|san|clock`。
 - 调查员、NPC、地点、物品状态改变：`entity`，把玩家可知和 Keeper 状态分开写。

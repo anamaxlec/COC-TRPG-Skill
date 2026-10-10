@@ -67,6 +67,7 @@ EMPTY_MEMORY = {
         "location": "",
         "scene": "",
         "companions": "",
+        "public_hook": "",
         "next_hook": "",
     },
     "journal": [],
@@ -211,6 +212,7 @@ def normalize_memory(memory):
         for bucket, values in memory.get(section, {}).items():
             if bucket in EMPTY_MEMORY[section] and not isinstance(values, dict):
                 raise SystemExit(f"记忆字段类型不正确: {section}.{bucket}")
+    legacy_hooks = "public_hook" not in memory.get("current", {})
     result = merge_defaults(EMPTY_MEMORY, memory)
     for section in ("meta", "current", "summaries"):
         if any(not isinstance(result[section][key], str) for key in EMPTY_MEMORY[section]):
@@ -240,6 +242,11 @@ def normalize_memory(memory):
                 continue
             if not valid:
                 raise SystemExit(f"记忆记录字段类型不正确: {key}")
+    if legacy_hooks:
+        # Old next_hook values may contain Keeper plans, including in cached summaries.
+        # Keep that information private and rebuild only the player-facing caches.
+        result["summaries"]["public"] = ""
+        result["summaries"]["scene"] = ""
     return result
 
 
@@ -301,7 +308,8 @@ def create_empty_memory(args):
     memory["current"].update({
         "location": args.location or "",
         "scene": args.scene or "",
-        "companions": args.characters or "",
+        "companions": "",
+        "public_hook": args.public_hook or "",
         "next_hook": args.hook or "",
     })
     if args.recap:
@@ -488,6 +496,14 @@ def latest_journal(memory, keeper=False, limit=8):
     return entries[-limit:]
 
 
+def companions_for_display(memory):
+    companions = memory["current"].get("companions")
+    # Earlier init commands copied the player characters into companions.
+    if companions == memory["meta"].get("player_characters"):
+        return "未记录"
+    return companions or "未记录"
+
+
 def build_public_summary(memory):
     meta = memory["meta"]
     current = memory["current"]
@@ -499,8 +515,9 @@ def build_public_summary(memory):
         f"- 时间: {current.get('time') or '未记录'}",
         f"- 地点: {current.get('location') or '未记录'}",
         f"- 场景: {current.get('scene') or '未记录'}",
-        f"- 同行者: {current.get('companions') or meta.get('player_characters') or '未记录'}",
-        f"- 下一轮钩子: {current.get('next_hook') or '从当前场景给出行动切口'}",
+        f"- 玩家调查员: {meta.get('player_characters') or '未记录'}",
+        f"- 同行者: {companions_for_display(memory)}",
+        f"- 公开接续: {current.get('public_hook') or '从当前场景继续'}",
         "",
         "## 最近公开事件",
     ]
@@ -530,7 +547,8 @@ def build_keeper_summary(memory):
         f"- Keeper 风格: {meta.get('keeper_style') or '平衡 Keeper'}",
         f"- 内容边界: {meta.get('boundaries') or '未记录'}",
         f"- 当前场景: {current.get('scene') or '未记录'}",
-        f"- 下一轮钩子: {current.get('next_hook') or '未记录'}",
+        f"- 公开接续: {current.get('public_hook') or '未记录'}",
+        f"- Keeper 下一步安排: {current.get('next_hook') or '未记录'}",
         "",
         "## 最近完整事件",
     ]
@@ -559,7 +577,7 @@ def build_scene_summary(memory):
     return "\n".join([
         f"当前场景: {current.get('scene') or '未记录'}",
         f"地点: {current.get('location') or '未记录'}",
-        f"下一轮钩子: {current.get('next_hook') or '未记录'}",
+        f"公开接续: {current.get('public_hook') or '从当前场景继续'}",
         "最近公开变化:",
         *bullet_lines(latest_public),
     ]).strip() + "\n"
@@ -609,9 +627,10 @@ def read_save_file(data_dir, path):
     if not isinstance(raw_memory, dict):
         raise SystemExit("存档缺少 memory 数据。")
     expected = save_data.get("checksum")
-    memory = normalize_memory(raw_memory)
-    if expected and expected != memory_checksum(memory):
+    # Verify the saved payload before adding defaults or migrating public caches.
+    if expected and expected != memory_checksum(raw_memory):
         raise SystemExit("存档校验失败，文件可能被改动或复制损坏。")
+    memory = normalize_memory(raw_memory)
     return memory, save_path
 
 
@@ -637,10 +656,12 @@ def render_markdown(memory):
         f"| 当前时间 | {current.get('time', '')} |",
         f"| 当前地点 | {current.get('location', '')} |",
         f"| 当前场景 | {current.get('scene', '')} |",
-        f"| 同行者 | {current.get('companions', '')} |",
+        f"| 玩家调查员 | {meta.get('player_characters') or '未记录'} |",
+        f"| 同行者 | {companions_for_display(memory)} |",
         f"| Keeper 风格 | {meta.get('keeper_style', '')} |",
         f"| 内容边界 | {meta.get('boundaries', '')} |",
-        f"| 下一轮钩子 | {current.get('next_hook', '')} |",
+        f"| 公开接续 | {current.get('public_hook', '')} |",
+        f"| Keeper 下一步安排 | {current.get('next_hook', '')} |",
         f"| 最近快照 | {meta.get('last_snapshot_at', '')} |",
         f"| 最近存档 | {meta.get('last_save_at', '')} |",
         f"| 更新时间 | {meta.get('updated_at', '')} |",
@@ -689,7 +710,7 @@ def render_markdown(memory):
         "- [ ] 玩家已知线索没有混入 Keeper Only 真相。",
         "- [ ] NPC 位置、态度、秘密一致。",
         "- [ ] 暗骰、延迟 SAN、威胁时钟和未结算事项已记录。",
-        "- [ ] 下一轮钩子清楚。",
+        "- [ ] 公开接续提示清楚，Keeper 下一步安排保持隐藏。",
         "",
     ])
     return "\n".join(lines)
@@ -703,9 +724,10 @@ def print_recall(memory, keeper=False):
     print(f"- 时间: {current.get('time') or '未记录'}")
     print(f"- 地点: {current.get('location') or '未记录'}")
     print(f"- 场景: {current.get('scene') or '未记录'}")
-    print(f"- 同行者: {current.get('companions') or meta.get('player_characters') or '未记录'}")
+    print(f"- 玩家调查员: {meta.get('player_characters') or '未记录'}")
+    print(f"- 同行者: {companions_for_display(memory)}")
     print(f"- Keeper 风格: {meta.get('keeper_style') or '平衡 Keeper'}")
-    print(f"- 下一轮钩子: {current.get('next_hook') or '未记录'}")
+    print(f"- 公开接续: {current.get('public_hook') or '从当前场景继续'}")
     print("\n## 玩家可知续跑摘要")
     print((summaries.get("public") or build_public_summary(memory)).strip())
     if keeper:
@@ -788,6 +810,7 @@ def cmd_set_current(args):
         "location": args.location,
         "scene": args.scene,
         "companions": args.companions,
+        "public_hook": args.public_hook,
         "next_hook": args.hook,
     }
     meta_updates = {
@@ -878,6 +901,8 @@ def cmd_load(args):
     original_name = memory.get("meta", {}).get("campaign") or "campaign"
     target_name = args.name or original_name
     memory["meta"]["campaign"] = target_name
+    if target_name != original_name:
+        refresh_summaries(memory)
     with MemoryLock(data_dir, target_name):
         json_path, _ = memory_paths(data_dir, target_name)
         if json_path.exists() and not args.force:
@@ -916,10 +941,11 @@ def main():
     init_p.add_argument("--era", default="", help="时代")
     init_p.add_argument("--location", default="", help="初始地点")
     init_p.add_argument("--scene", default="", help="当前场景")
-    init_p.add_argument("--characters", default="", help="调查员或同行者")
+    init_p.add_argument("--characters", default="", help="玩家扮演的调查员；同行者用 set-current --companions 记录")
     init_p.add_argument("--style", default="", help="Keeper 风格")
     init_p.add_argument("--boundaries", default="", help="内容边界")
-    init_p.add_argument("--hook", default="", help="下一轮钩子")
+    init_p.add_argument("--public-hook", default="", help="玩家已知的场景接续提示")
+    init_p.add_argument("--keeper-hook", "--hook", dest="hook", default="", help="Keeper 下一步安排；--hook 是兼容别名")
     init_p.add_argument("--recap", default="", help="初始公开回顾")
     init_p.add_argument("--force", action="store_true", help="覆盖已有 v2 记忆")
     init_p.set_defaults(func=cmd_init)
@@ -941,7 +967,8 @@ def main():
     current_p.add_argument("--location", default=None, help="当前地点")
     current_p.add_argument("--scene", default=None, help="当前场景")
     current_p.add_argument("--companions", default=None, help="同行者")
-    current_p.add_argument("--hook", default=None, help="下一轮钩子")
+    current_p.add_argument("--public-hook", default=None, help="玩家已知的场景接续提示")
+    current_p.add_argument("--keeper-hook", "--hook", dest="hook", default=None, help="Keeper 下一步安排；--hook 是兼容别名")
     current_p.add_argument("--style", default=None, help="Keeper 风格")
     current_p.add_argument("--boundaries", default=None, help="内容边界")
     current_p.add_argument("--characters", default=None, help="调查员")

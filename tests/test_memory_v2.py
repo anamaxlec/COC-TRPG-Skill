@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from copy import deepcopy
 from pathlib import Path
 
 
@@ -37,6 +38,48 @@ class MemoryCliTest(unittest.TestCase):
             self.assertIn("HP 7", out)
             self.assertNotIn("HP 12", out)
 
+    def test_keeper_hook_is_private_before_and_after_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            public = "门外响起敲门声，调查员尚未开门"
+            secret = "今晚凶手会伪装成警察登门"
+            self.run_cmd(tmp, "init", "--data-dir", tmp, "--name", "钩子隔离", "--public-hook", public, "--keeper-hook", secret)
+            for snapshot in (False, True):
+                if snapshot:
+                    self.run_cmd(tmp, "snapshot", "--data-dir", tmp, "--name", "钩子隔离")
+                with self.subTest(snapshot=snapshot):
+                    player = self.run_cmd(tmp, "recall", "--data-dir", tmp, "--name", "钩子隔离")
+                    keeper = self.run_cmd(tmp, "recall", "--data-dir", tmp, "--name", "钩子隔离", "--keeper")
+                    self.assertIn(public, player)
+                    self.assertNotIn(secret, player)
+                    self.assertIn(secret, keeper)
+            memory = load_memory_module().load_memory(tmp, "钩子隔离")
+            self.assertNotIn(secret, memory["summaries"]["scene"])
+
+    def test_player_character_and_companions_are_distinct_in_recall(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.run_cmd(tmp, "init", "--data-dir", tmp, "--name", "人物身份", "--characters", "林知远")
+            self.run_cmd(tmp, "snapshot", "--data-dir", tmp, "--name", "人物身份")
+            out = self.run_cmd(tmp, "recall", "--data-dir", tmp, "--name", "人物身份")
+            self.assertIn("玩家调查员: 林知远", out)
+            self.assertNotIn("同行者: 林知远", out)
+            self.run_cmd(tmp, "set-current", "--data-dir", tmp, "--name", "人物身份", "--companions", "门卫李青")
+            out = self.run_cmd(tmp, "recall", "--data-dir", tmp, "--name", "人物身份")
+            self.assertIn("玩家调查员: 林知远", out)
+            self.assertIn("同行者: 门卫李青", out)
+
+    def test_hook_alias_is_private_and_public_updates_preserve_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            secret = "地下室的守卫将在午夜撤走"
+            self.run_cmd(tmp, "init", "--data-dir", tmp, "--name", "旧口令", "--hook", secret)
+            self.run_cmd(tmp, "set-current", "--data-dir", tmp, "--name", "旧口令", "--public-hook", "刚到走廊")
+            player = self.run_cmd(tmp, "recall", "--data-dir", tmp, "--name", "旧口令")
+            self.assertIn("刚到走廊", player)
+            self.assertNotIn(secret, player)
+            self.run_cmd(tmp, "set-current", "--data-dir", tmp, "--name", "旧口令", "--public-hook", "")
+            memory = load_memory_module().load_memory(tmp, "旧口令")
+            self.assertEqual(memory["current"]["public_hook"], "")
+            self.assertEqual(memory["current"]["next_hook"], secret)
+
     def test_updates_preserve_visibility_and_closed_threads_leave_recall(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.run_cmd(tmp, "init", "--data-dir", tmp, "--name", "隔离")
@@ -60,7 +103,7 @@ class MemoryCliTest(unittest.TestCase):
                 tmp,
                 "init", "--data-dir", tmp, "--name", "榕渊", "--era", "modern",
                 "--location", "福州", "--scene", "旧仓山洋楼", "--characters", "林知远",
-                "--style", "平衡 Keeper", "--hook", "二层潮湿手印",
+                "--style", "平衡 Keeper", "--public-hook", "二层潮湿手印",
             )
             self.run_cmd(tmp, "record", "--data-dir", tmp, "--name", "榕渊", "--visibility", "public", "--kind", "scene", "--text", "调查员进入旧仓山洋楼。")
             self.run_cmd(tmp, "record", "--data-dir", tmp, "--name", "榕渊", "--visibility", "keeper", "--kind", "note", "--text", "墙内有未公开的仪式残留。")
@@ -101,6 +144,13 @@ class MemoryCliTest(unittest.TestCase):
             out = self.run_cmd(tmp, "list", "--data-dir", tmp)
             self.assertIn("原团", out)
             self.assertIn("导入团", out)
+            for scope in ([], ["--keeper"]):
+                out = self.run_cmd(tmp, "recall", "--data-dir", tmp, "--name", "导入团", *scope)
+                self.assertIn("导入团", out)
+                self.assertNotIn("原团", out)
+            imported = load_memory_module().load_memory(tmp, "导入团")
+            self.assertIn("# 导入团", imported["summaries"]["public"])
+            self.assertIn("# 导入团", imported["summaries"]["keeper"])
 
     def test_env_data_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -118,6 +168,50 @@ class MemoryCliTest(unittest.TestCase):
 
 
 class MemoryModuleTest(unittest.TestCase):
+    def legacy_save(self, memory, path):
+        value = deepcopy(memory.EMPTY_MEMORY)
+        value["meta"]["campaign"] = "旧格式"
+        value["meta"]["player_characters"] = "林知远"
+        value["current"]["companions"] = "林知远"
+        value["current"].pop("public_hook")
+        secret = "凶手将在今晚伪装成警察"
+        value["current"]["next_hook"] = secret
+        value["summaries"]["public"] = "旧公开摘要：" + secret
+        value["summaries"]["scene"] = "旧场景摘要：" + secret
+        value["summaries"]["keeper"] = "Keeper 备忘：" + secret
+        payload = {"format": memory.SAVE_FORMAT, "version": 2, "memory": value, "checksum": memory.memory_checksum(value)}
+        memory.write_json_atomic(path, payload)
+        return payload, secret
+
+    def test_legacy_save_keeps_hook_private_and_discards_public_caches(self):
+        memory = load_memory_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "old.cocsave.json"
+            _, secret = self.legacy_save(memory, path)
+            original = path.read_bytes()
+            loaded, _ = memory.read_save_file(tmp, str(path))
+            self.assertEqual(loaded["current"]["next_hook"], secret)
+            self.assertEqual(loaded["current"]["public_hook"], "")
+            self.assertEqual(loaded["summaries"]["public"], "")
+            self.assertEqual(loaded["summaries"]["scene"], "")
+            self.assertNotIn(secret, memory.build_public_summary(loaded))
+            self.assertNotIn(secret, memory.build_scene_summary(loaded))
+            self.assertIn(secret, memory.build_keeper_summary(loaded))
+            self.assertIn(secret, loaded["summaries"]["keeper"])
+            self.assertIn("玩家调查员: 林知远", memory.build_public_summary(loaded))
+            self.assertNotIn("同行者: 林知远", memory.build_public_summary(loaded))
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_legacy_payload_integrity_is_checked_before_migration(self):
+        memory = load_memory_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tampered.cocsave.json"
+            payload, _ = self.legacy_save(memory, path)
+            payload["memory"]["summaries"]["public"] = "已被篡改的旧缓存"
+            memory.write_json_atomic(path, payload)
+            with self.assertRaisesRegex(SystemExit, "校验失败"):
+                memory.read_save_file(tmp, str(path))
+
     def test_malformed_import_shapes_are_rejected(self):
         memory = load_memory_module()
         for patch in ({"state": {"npcs": []}}, {"journal": [{}]}, {"clues": {"C-001": "not-an-object"}}):

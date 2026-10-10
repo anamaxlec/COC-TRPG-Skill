@@ -211,7 +211,7 @@ def main():
         p = sub.add_parser(command)
         p.add_argument("--data-dir", default="", help="与 memory.py 使用同一个数据目录")
         if command == "init":
-            p.add_argument("--repo", required=True, help="自己的 fork 或独立私有库：用户名/仓库名")
+            p.add_argument("--repo", required=True, help="独立私有存档库或自己的 fork：用户名/仓库名")
             p.add_argument("--transport", choices=("https", "ssh"), default="https")
         if command in ("push", "pull"):
             p.add_argument("--name", required=True)

@@ -1,4 +1,6 @@
+import contextlib
 import importlib.util
+import io
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -77,6 +79,40 @@ class DiceRulesTest(unittest.TestCase):
         dice = load_dice_module()
         with mock.patch.object(dice, "d100_check", side_effect=[(55, "常规成功 REGULAR", []), (40, "常规成功 REGULAR", [])]):
             self.assertEqual(dice.opposed_check(70, 50)[-1], "A")
+
+    def test_opposed_equal_skills_roll_fresh_d100_to_decide_winner(self):
+        dice = load_dice_module()
+        for rolls, winner in (([80, 10], "B"), ([10, 80], "A")):
+            history = []
+            with self.subTest(winner=winner), mock.patch.object(dice, "d100_check", side_effect=[(35, "常规成功 REGULAR", []), (40, "常规成功 REGULAR", [])]), mock.patch.object(dice.RNG, "randint", side_effect=rolls):
+                result = dice.opposed_check(60, 60, tie_breaks=history)
+            self.assertEqual(result, (35, "常规成功 REGULAR", 40, "常规成功 REGULAR", winner))
+            self.assertEqual(history, [tuple(rolls)])
+
+    def test_opposed_tie_break_continues_after_identical_dice(self):
+        dice = load_dice_module()
+        history = []
+        with mock.patch.object(dice, "d100_check", return_value=(35, "常规成功 REGULAR", [])), mock.patch.object(dice.RNG, "randint", side_effect=[20, 20, 90, 10]) as rng:
+            self.assertEqual(dice.opposed_check(60, 60, tie_breaks=history)[-1], "B")
+        self.assertEqual(history, [(20, 20), (90, 10)])
+        self.assertEqual(rng.call_count, 4)
+
+    def test_opposed_continuous_ties_stop_without_inventing_a_winner(self):
+        dice = load_dice_module()
+        history = []
+        with mock.patch.object(dice, "d100_check", return_value=(35, "常规成功 REGULAR", [])), mock.patch.object(dice.RNG, "randint", return_value=20) as rng:
+            self.assertEqual(dice.opposed_check(60, 60, tie_breaks=history)[-1], "平局 DRAW")
+        self.assertEqual(len(history), 10)
+        self.assertEqual(rng.call_count, 20)
+
+    def test_opposed_cli_reports_initial_rolls_and_tie_break(self):
+        dice = load_dice_module()
+        output = io.StringIO()
+        with mock.patch("sys.argv", ["dice.py", "--opposed", "60", "60"]), mock.patch.object(dice, "d100_check", return_value=(35, "常规成功 REGULAR", [])), mock.patch.object(dice.RNG, "randint", side_effect=[80, 10]), contextlib.redirect_stdout(output):
+            dice.main()
+        self.assertIn("掷骰 35", output.getvalue())
+        self.assertIn("决胜骰 1: A = 80, B = 10", output.getvalue())
+        self.assertIn("B 获胜", output.getvalue())
 
     def test_movement_rate_three_cases(self):
         dice = load_dice_module()

@@ -202,8 +202,10 @@ def is_success(level):
     return any(tag in level for tag in ("CRITICAL", "EXTREME", "HARD", "REGULAR"))
 
 
-def opposed_check(skill_a, skill_b):
-    """D100 对抗检定，返回 A vs B 的结果。"""
+def opposed_check(skill_a, skill_b, *, tie_breaks=None, max_tie_breaks=10):
+    """返回原检定与胜方；可用 tie_breaks 收集另投 D100 的决胜记录。"""
+    if max_tie_breaks < 1:
+        raise ValueError("决胜骰次数上限必须至少为 1")
     ra, la, _ = d100_check(skill_a)
     rb, lb, _ = d100_check(skill_b)
     order = {"CRITICAL": 5, "EXTREME": 4, "HARD": 3, "REGULAR": 2, "FAIL": 1, "FUMBLE": 0}
@@ -218,6 +220,13 @@ def opposed_check(skill_a, skill_b):
         win = "A" if skill_a > skill_b else "B"
     else:
         win = "平局 DRAW"
+        for _ in range(max_tie_breaks):
+            a, b = RNG.randint(1, 100), RNG.randint(1, 100)
+            if tie_breaks is not None:
+                tie_breaks.append((a, b))
+            if a != b:
+                win = "A" if a < b else "B"
+                break
     return ra, la, rb, lb, win
 
 
@@ -532,11 +541,14 @@ def main():
             print(f"   成功统计: {success_count}/{args.repeat}")
     elif args.opposed:
         sa, sb = args.opposed
-        ra, la, rb, lb, win = opposed_check(sa, sb)
+        tie_breaks = []
+        ra, la, rb, lb, win = opposed_check(sa, sb, tie_breaks=tie_breaks)
         print("D100 对抗检定")
         print(f"   A (技能 {sa}%): 掷骰 {ra} -> {la}")
         print(f"   B (技能 {sb}%): 掷骰 {rb} -> {lb}")
-        print(f"   结果: {'A 获胜' if win == 'A' else ('B 获胜' if win == 'B' else '技能值与成功等级相同，双方另投 D100，低者获胜')}")
+        for index, (a, b) in enumerate(tie_breaks, 1):
+            print(f"   决胜骰 {index}: A = {a}, B = {b}（低者胜）")
+        print(f"   结果: {'A 获胜' if win == 'A' else ('B 获胜' if win == 'B' else '决胜骰连续同点达到次数上限，待 Keeper 裁定')}")
     elif args.san_check:
         san, loss_expr = args.san_check
         try:

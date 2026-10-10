@@ -21,7 +21,7 @@ python scripts/memory.py archive-legacy
 1. 不明确团名时先列出：`python scripts/memory.py list`
 2. 读取完整 Keeper 摘要：`python scripts/memory.py recall --name "<团名>" --keeper`
 3. 对玩家只输出玩家可知摘要，不展示 Keeper 段落。
-4. 从 `当前场景` 和 `下一轮钩子` 继续，不重开剧情。
+4. 从 `当前场景` 和公开接续提示继续；Keeper 下一步安排只用于幕后推演，不直接展示。
 5. 场景结束或关键状态变化后写入 v2 记忆，并在需要时 `snapshot`。纯回顾只读取；不能为了续团重掷已经结算的骰子。
 
 需要 GitHub 存档时读取 [github_memory.md](github_memory.md)。它使用相同的数据目录，上传指定团的完整快照；普通本地写入不触发上传。
@@ -49,9 +49,15 @@ python scripts/memory.py init --name "<团名>" --era "modern" --location "<地�
 更新当前落点：
 
 ```bash
-python scripts/memory.py set-current --name "<团名>" --time "<时间>" --location "<地点>" --scene "<场景>" --companions "<同行者>" --hook "<下一轮钩子>"
+python scripts/memory.py set-current --name "<团名>" --time "<时间>" --location "<地点>" --scene "<场景>" --companions "<同行者>" --public-hook "<玩家已知的下一步入口>" --keeper-hook "<Keeper 幕后安排>"
 python scripts/memory.py set-current --name "<团名>" --style "<KP风格>" --boundaries "<内容边界>"
 ```
+
+`--public-hook` 存入 `current.public_hook`，普通 `recall` 和场景摘要可显示它；`--keeper-hook` 存入 `current.next_hook`，只进入 Keeper 回顾。旧 `--hook` 是 `--keeper-hook` 的兼容别名。省略一个参数会保留其原值，传入空字符串会清空它。
+
+`init --characters` 记录玩家扮演的调查员；`set-current --companions` 记录当前同行的人物，单独行动时可写“无”。回顾分别列出两者。
+
+读取未区分钩子的旧 v2 团档时，原 `next_hook` 保留为 Keeper 信息，公开与场景摘要缓存重新生成；需要公开的接续提示再用 `--public-hook` 写入。旧存档文件保持原样，仍使用 v2 格式。重命名导入会用新团名重新生成摘要。
 
 公开事件、决定、状态变化：
 
@@ -117,7 +123,7 @@ python scripts/memory.py snapshot --name "<团名>"
 - `record` 不会自动修改角色数值或关闭线程；结算后同时更新相应 `entity` / `thread`。SAN 状态记录日初 SAN、本游戏日累计损失和当前 SAN，换游戏日再重置累计；不要用每次检定前的 SAN 重算日初阈值。
 - `recall` 只汇总最近的事件流水。长期成立的真相、NPC 动机和世界规则同时写入实体 `keeper` 字段或线索，未结算后果写入线程，不能只藏在一条旧 `record` 中。
 - 快照摘要是缓存。状态编辑后缓存失效，回顾按最新结构化状态生成；自定义摘要中的长期事实也要落入实体、线索或线程，不能只依赖一段摘要。
-- 场景结束时必须更新 `set-current --hook`，保证下次能直接开场。
+- 场景结束时用 `set-current --public-hook` 更新玩家已知的接续入口，幕后安排另用 `--keeper-hook` 更新。
 
 ## 续跑前检查
 
@@ -126,4 +132,4 @@ python scripts/memory.py snapshot --name "<团名>"
 - 玩家已知线索没有混入 Keeper Only 真相。
 - NPC 位置、态度、秘密和下一步行动一致。
 - 暗骰、延迟 SAN、威胁时钟和敌方行动已记录。
-- 下一轮钩子足够具体，能直接接入玩家行动。
+- 公开接续提示能直接接入玩家行动，Keeper 下一步安排保持隐藏。

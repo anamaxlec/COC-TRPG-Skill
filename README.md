@@ -16,7 +16,7 @@
 - **🎲 标准 D100 工具**：支持技能检定、奖励骰、惩罚骰、对抗检定、SAN 损失、伤害和技能点计算。
 - **🧠 跑团记忆系统**：记录玩家可知内容、Keeper Only 信息、剧本连续性、未结算事项和下一轮开场钩子。
 - **💾 可迁移存档**：导出 `.cocsave.json` 单文件存档，换电脑后可导入继续。
-- **☁️ GitHub 存档**：使用自己的 fork 或独立私有仓库，在 `coc-saves` 分支保存完整团档，支持换机恢复、覆盖前备份和多人设备冲突拦截。
+- **☁️ GitHub 存档**：使用独立私有仓库保存完整团档，支持换机恢复、覆盖前备份和多设备冲突处理，也支持使用自己的 fork。
 - **🎩 NPC 与模组模板**：支持公开身份、隐藏动机、线索、误导点、逼问反应和离场替代方案。
 - **📚 现成剧本库**：内置《古城诡秘》三个中文剧本的原 PDF 与分篇文本，另有四个 Chaosium 官方免费模组入口，支持无剧透选本、按原作备团与续跑。
 - **🧰 轻量无依赖**：Python 脚本仅使用标准库。
@@ -26,8 +26,12 @@
 - 跑团叙事减少固定菜单与重复提示，按场景需要给行动切口，保留玩家决定权。
 - 修复续团摘要滞后、隐藏线索更新后可见性变化，以及已解决事项仍进入待办的问题。
 - SAN 支持单次损失后的 INT 检定和按游戏日累计损失判定不定疯狂；修正 MOV、普通对抗同级比较与预设角色技能点分配。
-- 新增 [GitHub 团档同步](#github-存档fork-后使用)：使用自己的 fork 保存进度，支持换机恢复、覆盖前备份与多设备冲突处理。
+- 新增 [GitHub 团档同步](#github-存档独立私有仓库)：使用独立私有仓库保存进度，支持换机恢复、覆盖前备份与多设备冲突处理。
 - 新增 [剧本库](#-剧本库)：内置《古城诡秘》三个中文剧本的原 PDF 与分篇文本，并提供四个 Chaosium 官方免费模组入口。
+- 对抗检定在成功等级与技能值均相同时自动投决胜骰，并显示每轮结果。
+- 续团提示区分公开接续与 Keeper 安排，回顾分别列出玩家调查员与同行者；重命名导入存档时同步更新摘要中的团名。
+- 主持流程细化 NPC 等待回应的停顿、跨回合叙事变化与玩家行动对原作后续事件的影响。
+- 新增 [主持对话评估工具](tests/keeper_evals/README.md)，支持按固定场景生成回复、独立评分与保存评估记录。
 
 ## v2 记忆系统
 
@@ -49,6 +53,7 @@ coc-trpg-skill/
 │   ├── dice.py
 │   ├── memory.py
 │   ├── github_memory.py
+│   ├── keeper_eval.py
 │   ├── random_name.py
 │   └── random_encounter.py
 ├── references/
@@ -72,22 +77,30 @@ coc-trpg-skill/
 ├── characters/
 ├── scenarios/
 ├── saves/
+├── tests/
+│   └── keeper_evals/            # 主持对话场景与运行说明
 └── npcs/
 ```
 
 ## 🚀 安装
 
+个人安装，对所有项目可用：
+
 ```bash
-git clone https://github.com/anamaxlec/COC-TRPG-Skill.git ~/.codex/skills/coc-trpg-skill
+mkdir -p ~/.agents/skills
+git clone https://github.com/anamaxlec/COC-TRPG-Skill.git ~/.agents/skills/coc-trpg-skill
 ```
 
-或把整个 `coc-trpg-skill/` 文件夹复制到：
+项目安装，在目标项目根目录执行：
 
-```text
-~/.codex/skills/coc-trpg-skill/
+```bash
+mkdir -p .agents/skills
+git clone https://github.com/anamaxlec/COC-TRPG-Skill.git .agents/skills/coc-trpg-skill
 ```
 
-重启或刷新 Codex 后输入：
+也可以下载仓库并将文件夹放入相应目录，目录中直接包含 `SKILL.md`。目录约定见 [Codex 官方 Skill 文档](https://learn.chatgpt.com/docs/build-skills)。
+
+Codex 加载 skill 后输入：
 
 ```text
 克总发糖
@@ -220,6 +233,16 @@ python scripts/memory.py load --file "saves/<存档名>.cocsave.json"
 
 `memory.py` 默认数据目录：macOS/Linux 为 `~/.codex/data/coc-trpg-skill`，Windows 为 `%APPDATA%\coc-trpg-skill`。可用 `COC_TRPG_DATA_DIR` 或 `--data-dir` 覆盖。旧 v1 `scenarios/` 和 `saves/` 可用 `python scripts/memory.py archive-legacy` 归档。
 
+下一轮提示分别保存玩家已知的接续入口与 Keeper 幕后安排：
+
+```bash
+python scripts/memory.py set-current --name "榕渊" \
+  --public-hook "调查员停在二层门口，门内传来脚步声" \
+  --keeper-hook "馆长正在门内销毁最后一封信"
+```
+
+普通 `recall` 展示公开接续提示，`recall --keeper` 同时读取幕后安排。旧 `--hook` 继续作为 Keeper 安排参数使用。
+
 ### 随机素材
 
 ```bash
@@ -229,15 +252,15 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 
 随机姓名脚本只负责姓名素材；复杂 NPC 建议按 `templates/npc_card.md` 由模型生成。
 
-### GitHub 存档：fork 后使用
+### GitHub 存档：独立私有仓库
 
-先 [fork 本项目](https://github.com/anamaxlec/COC-TRPG-Skill/fork)，安装 skill 并配置好 Git 身份与仓库访问权限。也可以使用独立私有仓库保存私密团档。存档位于目标仓库的 `coc-saves` 分支，包含玩家进度与 Keeper 信息，可见性跟随目标仓库。
+安装 skill 后，在 GitHub 创建一个独立私有仓库，例如 `COC-Saves`，并配置好 Git 身份与仓库访问权限。团档保存到该仓库的 `coc-saves` 分支，包含玩家进度、Keeper 信息与内容边界，可见性跟随目标仓库。
 
 在 skill 目录执行以下命令，将 `你的用户名` 替换为实际 GitHub 用户名：
 
 ```bash
 # 配置自己的存档仓库
-python scripts/github_memory.py init --repo 你的用户名/COC-TRPG-Skill
+python scripts/github_memory.py init --repo 你的用户名/COC-Saves
 python scripts/github_memory.py status
 
 # 按上方 memory.py 示例建团后，上传当前进度
@@ -252,7 +275,7 @@ python scripts/memory.py recall --name "榕渊" --keeper
 也可以直接对 Agent 说：
 
 ```text
-把《榕渊》的完整团档上传到我的 GitHub 仓库“你的用户名/COC-TRPG-Skill”。
+把《榕渊》的完整团档上传到我的私有仓库“你的用户名/COC-Saves”。
 ```
 
 ```text
@@ -261,16 +284,19 @@ python scripts/memory.py recall --name "榕渊" --keeper
 
 本地保存使用 `memory.py snapshot`，云端同步使用 `github_memory.py push`。换机时先配置相同仓库，再下载团档。SSH、同名团档替换、备份恢复与冲突处理见 [GitHub 存档手册](references/github_memory.md)。
 
+希望公开分享完整团档时，也可以 [fork 本项目](https://github.com/anamaxlec/COC-TRPG-Skill/fork)，将同步目标改为自己的 fork。公开 fork 中的团档及 Keeper 信息对外可见。
+
 ## 📄 模板与参考
 
 | 文件 | 用途 |
 |---|---|
 | `references/keeper_style.md` | KP 风格、短输入处理、自定义风格 |
 | `references/memory_playbook.md` | v2 记忆触发、续团、自动写入命令 |
-| `references/github_memory.md` | fork 存档、上传下载、换机与冲突处理 |
+| `references/github_memory.md` | 私有仓库存档、上传下载、换机与冲突处理 |
 | `references/checks_and_san.md` | D100、暗骰、SAN |
 | `references/scenario_library.md` | 内置剧本、官方免费入口、无剧透选本与原作备团 |
 | `references/scenario_design.md` | 模组、场景节点、线索网 |
+| [tests/keeper_evals/README.md](tests/keeper_evals/README.md) | 主持对话评估的场景与运行方法 |
 | `references/character_npc.md` | 车卡、职业、NPC |
 | `templates/keeper_style_profile.md` | 玩家自定义 KP 风格档案 |
 | `templates/npc_card.md` | 路人、配角、核心 NPC 数据卡 |
