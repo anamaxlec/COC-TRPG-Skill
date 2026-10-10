@@ -62,6 +62,7 @@ git clone https://github.com/anamaxlec/COC-TRPG-Skill.git ~/.agents/skills/coc-t
 Windows PowerShell：
 
 ```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.agents\skills" | Out-Null
 git clone https://github.com/anamaxlec/COC-TRPG-Skill.git "$env:USERPROFILE\.agents\skills\coc-trpg-skill"
 ```
 
