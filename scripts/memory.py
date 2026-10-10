@@ -200,9 +200,47 @@ def merge_defaults(default, value):
 
 
 def normalize_memory(memory):
+    if not isinstance(memory, dict):
+        raise SystemExit("记忆内容必须是 JSON 对象。")
     if memory.get("schema_version") != SCHEMA_VERSION:
         raise SystemExit("此文件不是 v2 记忆。旧 v1 记忆请先用 archive-legacy 归档后重新建团。")
-    return merge_defaults(EMPTY_MEMORY, memory)
+    for key, default in EMPTY_MEMORY.items():
+        if key in memory and isinstance(default, (dict, list)) and not isinstance(memory[key], type(default)):
+            raise SystemExit(f"记忆字段类型不正确: {key}")
+    for section in ("state", "threads"):
+        for bucket, values in memory.get(section, {}).items():
+            if bucket in EMPTY_MEMORY[section] and not isinstance(values, dict):
+                raise SystemExit(f"记忆字段类型不正确: {section}.{bucket}")
+    result = merge_defaults(EMPTY_MEMORY, memory)
+    for section in ("meta", "current", "summaries"):
+        if any(not isinstance(result[section][key], str) for key in EMPTY_MEMORY[section]):
+            raise SystemExit(f"记忆中的 {section} 字段必须是文本。")
+    if not result["meta"]["campaign"].strip():
+        raise SystemExit("记忆缺少团名。")
+    collections = [result["clues"], result["clocks"]]
+    for section in ("state", "threads"):
+        for bucket in EMPTY_MEMORY[section]:
+            if not isinstance(result[section][bucket], dict):
+                raise SystemExit(f"记忆字段类型不正确: {section}.{bucket}")
+            collections.append(result[section][bucket])
+    records = list(result["journal"])
+    if any(not isinstance(entry, dict) or not isinstance(entry.get("text"), str) for entry in records):
+        raise SystemExit("每条事件记录必须包含文本 text。")
+    for collection in collections:
+        records.extend(collection.values())
+    for record in records:
+        if not isinstance(record, dict):
+            raise SystemExit("记忆中的事件和状态记录必须是 JSON 对象。")
+        for key, value in record.items():
+            if key in {"tags", "alternate_paths"}:
+                valid = isinstance(value, list) and all(isinstance(item, str) for item in value)
+            elif key in {"id", "time", "visibility", "kind", "scene", "text", "type", "name", "public", "keeper", "status", "location", "notes", "updated_at", "source", "points_to", "key_inference", "next", "resolution", "progress", "trigger", "visible_sign"}:
+                valid = isinstance(value, str)
+            else:
+                continue
+            if not valid:
+                raise SystemExit(f"记忆记录字段类型不正确: {key}")
+    return result
 
 
 def memory_checksum(memory):
@@ -236,10 +274,13 @@ def load_memory(data_dir, name):
         return normalize_memory(json.load(f))
 
 
-def save_memory(data_dir, memory):
+def save_memory(data_dir, memory, preserve_summaries=False):
     name = memory["meta"]["campaign"] or "campaign"
     json_path, md_path = memory_paths(data_dir, name)
     memory["meta"]["updated_at"] = now()
+    if not preserve_summaries:
+        # A later edit invalidates the cached snapshot, even within the same second.
+        memory["summaries"] = deepcopy(EMPTY_MEMORY["summaries"])
     write_json_atomic(json_path, memory)
     write_text_atomic(md_path, render_markdown(memory))
     return json_path, md_path
@@ -307,7 +348,7 @@ def upsert_entity(memory, args):
         "id": key,
         "type": args.type,
         "name": args.entity,
-        "visibility": args.visibility,
+        "visibility": args.visibility or existing.get("visibility", "public"),
         "public": args.public if args.public is not None else existing.get("public", ""),
         "keeper": args.keeper if args.keeper is not None else existing.get("keeper", ""),
         "status": args.status if args.status is not None else existing.get("status", ""),
@@ -334,7 +375,7 @@ def upsert_clue(memory, args):
         "text": args.text if args.text is not None else existing.get("text", ""),
         "source": args.source if args.source is not None else existing.get("source", ""),
         "points_to": args.points_to if args.points_to is not None else existing.get("points_to", ""),
-        "visibility": args.visibility,
+        "visibility": args.visibility or existing.get("visibility", "public"),
         "key_inference": args.key_inference if args.key_inference is not None else existing.get("key_inference", ""),
         "alternate_paths": split_csv(args.alternate_path) if args.alternate_path is not None else existing.get("alternate_paths", []),
         "updated_at": now(),
@@ -350,7 +391,7 @@ def upsert_thread(memory, args):
     thread = {
         "id": key,
         "type": args.type,
-        "visibility": args.visibility,
+        "visibility": args.visibility or existing.get("visibility", "keeper"),
         "text": args.text if args.text is not None else existing.get("text", ""),
         "status": args.status if args.status is not None else existing.get("status", "open"),
         "next": args.next if args.next is not None else existing.get("next", ""),
@@ -367,7 +408,7 @@ def upsert_clock(memory, args):
     clock = {
         "id": key,
         "name": args.clock if args.clock is not None else existing.get("name", ""),
-        "visibility": args.visibility,
+        "visibility": args.visibility or existing.get("visibility", "keeper"),
         "progress": args.progress if args.progress is not None else existing.get("progress", ""),
         "trigger": args.trigger if args.trigger is not None else existing.get("trigger", ""),
         "visible_sign": args.visible if args.visible is not None else existing.get("visible_sign", ""),
@@ -383,6 +424,10 @@ def visible_items(items, keeper=False):
     if keeper:
         return list(items.values())
     return [item for item in items.values() if item.get("visibility") == "public"]
+
+
+def is_open(item):
+    return item.get("status", "open").lower() not in {"resolved", "closed", "settled", "cancelled", "completed"}
 
 
 def bullet_lines(items, empty="（暂无记录）"):
@@ -401,6 +446,8 @@ def render_entity_line(entity, keeper=False):
         pieces.append(entity["public"])
     if keeper and entity.get("keeper"):
         pieces.append(f"Keeper: {entity['keeper']}")
+    if keeper and entity.get("notes"):
+        pieces.append(f"备注: {entity['notes']}")
     return "；".join(piece for piece in pieces if piece)
 
 
@@ -467,9 +514,9 @@ def build_public_summary(memory):
     lines.extend(["", "## 公开未解决事项"])
     public_threads = []
     for bucket in ("open_questions", "unresolved"):
-        public_threads.extend(item for item in memory["threads"][bucket].values() if item.get("visibility") == "public")
+        public_threads.extend(item for item in memory["threads"][bucket].values() if item.get("visibility") == "public" and is_open(item))
     lines.extend(bullet_lines([render_thread_line(item) for item in public_threads]))
-    lines.extend(["", "## 续跑入口", "- 只用玩家可知内容做极短回顾。", "- 从当前场景继续，不要重开剧情。", "- 回顾后给 2-4 个行动切口，并允许自由行动。"])
+    lines.extend(["", "## 续跑入口", "- 只用玩家可知内容做极短回顾。", "- 从当前场景继续，不要重开剧情。", "- 在需要玩家决定时停下，按当前风格和玩家需要提供行动提示。"])
     return "\n".join(lines).strip() + "\n"
 
 
@@ -498,10 +545,10 @@ def build_keeper_summary(memory):
     lines.extend(["", "## 未结算线程"])
     all_threads = []
     for bucket in ("open_questions", "foreshadowing", "unresolved", "delayed_san", "hidden_rolls"):
-        all_threads.extend(memory["threads"][bucket].values())
+        all_threads.extend(item for item in memory["threads"][bucket].values() if is_open(item))
     lines.extend(bullet_lines([render_thread_line(item) for item in all_threads]))
     lines.extend(["", "## 威胁时钟"])
-    lines.extend(bullet_lines([render_clock_line(item) for item in memory["clocks"].values()]))
+    lines.extend(bullet_lines([render_clock_line(item) for item in memory["clocks"].values() if is_open(item)]))
     lines.extend(["", "## 续跑前核对", "- 玩家可知摘要不要混入 Keeper Only 真相。", "- 先处理暗骰、隐藏 SAN、倒计时和敌方行动。", "- NPC 真实动机、当前位置和态度要与当前状态一致。"])
     return "\n".join(lines).strip() + "\n"
 
@@ -600,13 +647,13 @@ def render_markdown(memory):
         "",
         "## 玩家可知续跑摘要",
         "",
-        summaries.get("public") or "- （运行 snapshot 后生成）\n",
+        summaries.get("public") or build_public_summary(memory),
         "## Keeper 续跑摘要（不要直接展示给玩家）",
         "",
-        summaries.get("keeper") or "- （运行 snapshot 后生成）\n",
+        summaries.get("keeper") or build_keeper_summary(memory),
         "## 最近场景摘要",
         "",
-        summaries.get("scene") or "- （运行 snapshot 后生成）\n",
+        summaries.get("scene") or build_scene_summary(memory),
     ]
 
     public_journal = [f"[{item.get('kind')}] {item.get('text')}" for item in memory["journal"] if item.get("visibility") == "public"]
@@ -667,7 +714,7 @@ def print_recall(memory, keeper=False):
     print("\n## 继续前检查")
     print("- 只对玩家输出玩家可知摘要。")
     print("- 先结算未处理状态，再推进当前场景。")
-    print("- 给 2-4 个行动切口，并允许玩家自由行动。")
+    print("- 在需要玩家决定时停下，按当前风格和玩家需要提供行动提示。")
 
 
 def archive_legacy_files(data_dir, force=False):
@@ -820,7 +867,7 @@ def cmd_snapshot(args):
         refresh_summaries(memory, args.public_summary, args.keeper_summary, args.scene_summary)
         save_path, save_data = write_save_file(data_dir, memory, args.output, args.force)
         memory["meta"]["last_save_at"] = save_data["exported_at"]
-        save_memory(data_dir, memory)
+        save_memory(data_dir, memory, preserve_summaries=True)
     print(f"已生成 v2 快照: {save_path}")
     print(f"校验值: {save_data['checksum']}")
 
@@ -835,7 +882,7 @@ def cmd_load(args):
         json_path, _ = memory_paths(data_dir, target_name)
         if json_path.exists() and not args.force:
             raise SystemExit(f"目标 v2 记忆已存在: {json_path}。如需覆盖，请加 --force。")
-        json_path, md_path = save_memory(data_dir, memory)
+        json_path, md_path = save_memory(data_dir, memory, preserve_summaries=True)
     print(f"已导入 v2 存档: {save_path}")
     print(f"原团名: {original_name}")
     print(f"当前团名: {target_name}")
@@ -905,7 +952,7 @@ def main():
     entity_p.add_argument("--entity", required=True, help="实体名称")
     entity_p.add_argument("--type", required=True, choices=ENTITY_TYPES, help="实体类型")
     entity_p.add_argument("--id", default="", help="实体 ID；默认由名称生成")
-    entity_p.add_argument("--visibility", choices=VISIBILITIES, default="public", help="默认可见性")
+    entity_p.add_argument("--visibility", choices=VISIBILITIES, default=None, help="新实体默认 public；更新时保留原值")
     entity_p.add_argument("--public", default=None, help="玩家可知状态")
     entity_p.add_argument("--keeper", default=None, help="Keeper Only 状态")
     entity_p.add_argument("--status", default=None, help="状态")
@@ -920,7 +967,7 @@ def main():
     clue_p.add_argument("--text", default=None, help="线索内容")
     clue_p.add_argument("--source", default=None, help="线索来源")
     clue_p.add_argument("--points-to", default=None, help="线索指向")
-    clue_p.add_argument("--visibility", choices=VISIBILITIES, default="public", help="公开或 Keeper Only")
+    clue_p.add_argument("--visibility", choices=VISIBILITIES, default=None, help="新线索默认 public；更新时保留原值")
     clue_p.add_argument("--key-inference", default=None, help="关键推论")
     clue_p.add_argument("--alternate-path", default=None, help="逗号分隔替代路径")
     clue_p.set_defaults(func=cmd_clue)
@@ -929,7 +976,7 @@ def main():
     thread_p.add_argument("--name", required=True, help="团名或模组名")
     thread_p.add_argument("--id", default="", help="线程 ID；默认 T-001 递增")
     thread_p.add_argument("--type", required=True, choices=THREAD_TYPES, help="线程类型")
-    thread_p.add_argument("--visibility", choices=VISIBILITIES, default="keeper", help="公开或 Keeper Only")
+    thread_p.add_argument("--visibility", choices=VISIBILITIES, default=None, help="新线程默认 keeper；更新时保留原值")
     thread_p.add_argument("--text", default=None, help="线程内容")
     thread_p.add_argument("--status", default=None, help="状态")
     thread_p.add_argument("--next", default=None, help="下一步")
@@ -940,7 +987,7 @@ def main():
     clock_p.add_argument("--name", required=True, help="团名或模组名")
     clock_p.add_argument("--id", default="", help="时钟 ID；默认 K-001 递增")
     clock_p.add_argument("--clock", default=None, help="时钟名称")
-    clock_p.add_argument("--visibility", choices=VISIBILITIES, default="keeper", help="公开或 Keeper Only")
+    clock_p.add_argument("--visibility", choices=VISIBILITIES, default=None, help="新时钟默认 keeper；更新时保留原值")
     clock_p.add_argument("--progress", default=None, help="当前进度")
     clock_p.add_argument("--trigger", default=None, help="触发条件")
     clock_p.add_argument("--visible", default=None, help="玩家可感知迹象")

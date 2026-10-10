@@ -19,6 +19,10 @@
 
 公开检定输出：技能、难度、失败代价、骰子结果、成功等级、后果。
 
+只对不确定且有代价的行动投骰，失败代价描述限于角色能预见的风险。孤注一掷由玩家主动提出并说明改变了什么做法；不自动重投，战斗和 SAN 不使用孤注一掷。
+
+普通对抗先比较成功等级，同级比较技能值；两者都相同则双方另投 D100，低者胜。`--opposed` 用于普通对抗，不替代战斗里闪避与反击的平局规则。
+
 ## 暗骰
 
 当公开检定会暴露隐藏信息时允许暗骰。例如：
@@ -42,11 +46,19 @@ python scripts/dice.py --san-check 60 0/1d6
 SAN 公开策略：
 
 - 公开 SAN：直观看到尸体、怪物、仪式、严重超自然现象。
-- 隐藏 SAN：梦境、记忆篡改、潜意识污染、不可见神话影响。
-- 延迟公开 SAN：影响已发生，但真相揭露或场景结束时再结算。
+- 隐藏或延迟公开 SAN：仅作为玩家事先同意的桌规使用。先记录实际损失与已结算状态，之后只补充公开信息，不能再次扣除；不能因为切换到沉浸风格就自动启用。
 
 疯狂阈值：
 
-- 单次损失 >= 5：临时疯狂。
-- 单次损失 >= 当前 SAN / 5：不定疯狂。
+- 单次损失 >= 5：需要 INT 检定，成功才进入临时疯狂，失败则不进入。缺 INT 时标记待判定，不自动掷疯狂表现。
+- 一个游戏日内累计损失达到日初 SAN 的五分之一（向上取整）：不定疯狂。不能把“累计”替换为“单次”，也不能每次用降低后的 SAN 重设阈值。游戏日边界由 Keeper 按团规确定。
 - SAN <= 0：永久疯狂，角色通常转为 NPC。
+
+```bash
+# 当前 SAN 51，日初 60，此前累计损失 9，INT 65
+python scripts/dice.py --san-check 51 0/1d6 --int 65 --day-start-san 60 --lost-today 9
+```
+
+脚本只给出本次结算结果，不自动更新调查员记忆。不提供日初信息时明确提示无法判定不定疯狂；不要自行假设当天没有先前损失。已经处于疯狂期间的再次发作由 Keeper 按完整规则处理。
+
+规则来源：[Chaosium SAN 说明](https://cthulhuwiki.chaosium.com/rules/sanity.html)、[普通对抗与奖励/惩罚骰](https://cthulhuwiki.chaosium.com/rules/opposed-skill-rolls.html)、[技能难度与孤注一掷](https://cthulhuwiki.chaosium.com/rules/skill-rolls-and-difficulty-levels.html)。不定疯狂的逐日累计参见 Keeper Rulebook 的 Sanity 规则；[Chaosium 单人模组记录表](https://www.chaosium.com/content/FreePDFs/CoC/CHA23181%20-%20Alone%20Against%20the%20Static/CHA23181%20-%20Printable%20Log%20Sheet.pdf) 也使用逐日记录，但该模组的简化措辞不能替代完整规则。

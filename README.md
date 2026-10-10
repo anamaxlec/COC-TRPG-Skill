@@ -16,10 +16,20 @@
 - **🎲 标准 D100 工具**：支持技能检定、奖励骰、惩罚骰、对抗检定、SAN 损失、伤害和技能点计算。
 - **🧠 跑团记忆系统**：记录玩家可知内容、Keeper Only 信息、剧本连续性、未结算事项和下一轮开场钩子。
 - **💾 可迁移存档**：导出 `.cocsave.json` 单文件存档，换电脑后可导入继续。
+- **☁️ GitHub 存档**：使用自己的 fork 或独立私有仓库，在 `coc-saves` 分支保存完整团档，支持换机恢复、覆盖前备份和多人设备冲突拦截。
 - **🎩 NPC 与模组模板**：支持公开身份、隐藏动机、线索、误导点、逼问反应和离场替代方案。
+- **📚 现成剧本库**：内置《古城诡秘》三个中文剧本的原 PDF 与分篇文本，另有四个 Chaosium 官方免费模组入口，支持无剧透选本、按原作备团与续跑。
 - **🧰 轻量无依赖**：Python 脚本仅使用标准库。
 
-## 🆕 本版本更新：v2 记忆系统
+## 🆕 更新说明 · 2026-10-10
+
+- 跑团叙事减少固定菜单与重复提示，按场景需要给行动切口，保留玩家决定权。
+- 修复续团摘要滞后、隐藏线索更新后可见性变化，以及已解决事项仍进入待办的问题。
+- SAN 支持单次损失后的 INT 检定和按游戏日累计损失判定不定疯狂；修正 MOV、普通对抗同级比较与预设角色技能点分配。
+- 新增 [GitHub 团档同步](#github-存档fork-后使用)：使用自己的 fork 保存进度，支持换机恢复、覆盖前备份与多设备冲突处理。
+- 新增 [剧本库](#-剧本库)：内置《古城诡秘》三个中文剧本的原 PDF 与分篇文本，并提供四个 Chaosium 官方免费模组入口。
+
+## v2 记忆系统
 
 本版本重建了长期跑团记忆系统，重点保证续团时能恢复当前场景、调查员状态、线索网络、NPC 动向、未结算事项、威胁时钟和 Keeper Only 真相。
 
@@ -28,7 +38,6 @@
 - **玩家/Keeper 隔离**：默认 `recall` 只输出玩家可知摘要；只有 `--keeper` 才会显示幕后真相、暗骰、隐藏 SAN 和敌方行动。
 - **跨平台数据目录**：macOS/Linux 默认写入 `~/.codex/data/coc-trpg-skill`，Windows 默认写入 `%APPDATA%\coc-trpg-skill`，避免把长期团资料混进 skill 安装目录。
 - **旧数据归档**：旧 v1 的 `scenarios/` 和 `saves/` 不自动迁移，可用 `python scripts/memory.py archive-legacy` 复制到归档目录。
-- **测试覆盖**：新增标准库 `unittest`，覆盖 v2 初始化、写入、快照、导入、public/keeper 隔离、数据目录和旧数据归档。
 
 ## 📦 项目结构
 
@@ -39,14 +48,19 @@ coc-trpg-skill/
 ├── scripts/
 │   ├── dice.py
 │   ├── memory.py
+│   ├── github_memory.py
 │   ├── random_name.py
 │   └── random_encounter.py
 ├── references/
 │   ├── keeper_style.md
 │   ├── memory_playbook.md
+│   ├── github_memory.md
 │   ├── checks_and_san.md
+│   ├── scenario_library.md
 │   ├── scenario_design.md
 │   └── character_npc.md
+├── assets/
+│   └── scenarios/ancient-city/   # 原 PDF、分篇文本与许可说明
 ├── templates/
 │   ├── character_sheet.md
 │   ├── npc_card.md
@@ -103,6 +117,32 @@ git clone https://github.com/anamaxlec/COC-TRPG-Skill.git ~/.codex/skills/coc-tr
 我要做侦察检定，技能 55，有 1 个奖励骰。
 ```
 
+## 📚 剧本库
+
+输入“剧本库”或“推荐一个现成剧本”，先看无剧透介绍，再选择开团。
+
+内置 **MasterNoah（诺亚城主）** 的《古城诡秘》合集：
+
+| 剧本 | 题材 | 原作人数 / 预计时长 |
+|---|---|---|
+| 校园黑色怪谈 | 现代校园、失踪调查 | 3–6 人 / 3–8 小时 |
+| 深埋地底的呼唤 | 地铁施工、古墓探索 | 3–6 人 / 2–4 小时 |
+| 可曾遇见梦中仙境 | 山庄度假、梦境解谜 | 2–4 人 / 3–6 小时 |
+
+这三个剧本可按顺序连跑，单人游玩由 KP 调整遭遇与技能覆盖。正文随仓库提供，包含原 PDF、可直接读取的分篇文本和按页定位的备团入口。地图、展示材料与表格保留在原 PDF 中。
+
+```text
+打开剧本库，先不要剧透。
+你当 KP，带我们跑《校园黑色怪谈》，使用原作真相和线索。
+我想一个人玩，帮我选适合单人的现成剧本。
+```
+
+另提供 **Alone Against the Flames、The Dead Boarder、The Lightless Beacon、The Haunting** 的 [Chaosium 官方免费入口](https://www.chaosium.com/cthulhu-adventures/)。选择后从官方来源获取正文，其中 **Alone Against the Flames** 是按编号段落推进的单人冒险。
+
+使用现成剧本时，Skill 会先读取所选剧本的真相、线索与结局，再根据调查员背景准备导入。长团存档记录剧本来源、当前场景、已发现线索与本团调整；下次说“继续《团名》”，即可从存档位置续跑。
+
+完整目录和读取方式见 [剧本库](references/scenario_library.md)。中文合集按 **CC BY-NC-SA 4.0** 收录，须署名、非商业使用，改编采用相同许可；详见 [来源与许可](assets/scenarios/ancient-city/NOTICE.md)。
+
 ## 🐙 交互菜单
 
 输入 `克总发糖`、`COC菜单` 或 `COC帮助` 时，Skill 会展示：
@@ -112,14 +152,14 @@ git clone https://github.com/anamaxlec/COC-TRPG-Skill.git ~/.codex/skills/coc-tr
 [1] 🎭 开始跑团 / 继续剧情
 [2] 📝 车卡 / 生成调查员
 [3] 📜 快速预设角色
-[4] 🏚️ 撰写模组 / 场景
+[4] 🏚️ 挑选剧本 / 撰写模组
 [5] 🎩 生成 NPC
 [6] 🎲 投骰 / 技能检定 / SAN
 [7] 🧰 规则速查 / Keeper 工具箱
 [8] 💾 存档 / 读档 / 导入导出
 ```
 
-用户只回复数字时，模型会直接进入对应流程。
+用户只回复数字时，引用最近一次仍有效的菜单或行动选项。
 
 ## 🛠️ 脚本工具
 
@@ -142,7 +182,15 @@ python scripts/dice.py --skill-calc 70 60 65 --credit 20
 python scripts/dice.py --pregen --era modern --occupation 记者 --region cn --format markdown
 ```
 
-`--pregen` 内置职业：私家侦探、记者、医生、教授、古董商、警员、民俗研究者、罪犯。
+`--pregen` 内置主题职业：私家侦探、记者、医生、教授、古董商、警员、民俗研究者、罪犯。技能在基础值上按职业与兴趣点数分配，Keeper 可继续按所选职业、年龄和时代完善角色卡与装备。
+
+新增的 SAN 参数用于一起结算理智损失、INT 检定与本游戏日的累计损失：
+
+```bash
+python scripts/dice.py --san-check 51 0/1d6 --int 65 --day-start-san 60 --lost-today 9
+```
+
+此例中调查员当前 SAN 为 51、INT 为 65、日初 SAN 为 60，本次检定前已累计损失 9 点。`--lost-today` 填写本次之前的累计损失；换游戏日时更新日初 SAN 并重置累计值。
 
 ### `scripts/memory.py`
 
@@ -181,13 +229,47 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 
 随机姓名脚本只负责姓名素材；复杂 NPC 建议按 `templates/npc_card.md` 由模型生成。
 
+### GitHub 存档：fork 后使用
+
+先 [fork 本项目](https://github.com/anamaxlec/COC-TRPG-Skill/fork)，安装 skill 并配置好 Git 身份与仓库访问权限。也可以使用独立私有仓库保存私密团档。存档位于目标仓库的 `coc-saves` 分支，包含玩家进度与 Keeper 信息，可见性跟随目标仓库。
+
+在 skill 目录执行以下命令，将 `你的用户名` 替换为实际 GitHub 用户名：
+
+```bash
+# 配置自己的存档仓库
+python scripts/github_memory.py init --repo 你的用户名/COC-TRPG-Skill
+python scripts/github_memory.py status
+
+# 按上方 memory.py 示例建团后，上传当前进度
+python scripts/github_memory.py push --name "榕渊" --include-keeper
+
+# 新电脑配置相同仓库后，列出并恢复进度
+python scripts/github_memory.py list
+python scripts/github_memory.py pull --name "榕渊"
+python scripts/memory.py recall --name "榕渊" --keeper
+```
+
+也可以直接对 Agent 说：
+
+```text
+把《榕渊》的完整团档上传到我的 GitHub 仓库“你的用户名/COC-TRPG-Skill”。
+```
+
+```text
+从我的 GitHub 存档库恢复《榕渊》，接着上次的场景继续。
+```
+
+本地保存使用 `memory.py snapshot`，云端同步使用 `github_memory.py push`。换机时先配置相同仓库，再下载团档。SSH、同名团档替换、备份恢复与冲突处理见 [GitHub 存档手册](references/github_memory.md)。
+
 ## 📄 模板与参考
 
 | 文件 | 用途 |
 |---|---|
 | `references/keeper_style.md` | KP 风格、短输入处理、自定义风格 |
 | `references/memory_playbook.md` | v2 记忆触发、续团、自动写入命令 |
+| `references/github_memory.md` | fork 存档、上传下载、换机与冲突处理 |
 | `references/checks_and_san.md` | D100、暗骰、SAN |
+| `references/scenario_library.md` | 内置剧本、官方免费入口、无剧透选本与原作备团 |
 | `references/scenario_design.md` | 模组、场景节点、线索网 |
 | `references/character_npc.md` | 车卡、职业、NPC |
 | `templates/keeper_style_profile.md` | 玩家自定义 KP 风格档案 |
@@ -199,19 +281,12 @@ python scripts/random_encounter.py --era modern --type urban --count 3
 
 - Python 3.8+
 - 无第三方依赖
+- 可选 GitHub 同步需要 Git，以及目标仓库的现有认证与写入权限
 
 ## 🧭 适用范围
 
-适合中文 COC 单人团、短团、Keeper 备团、快速车卡、NPC 生成和长期团续跑。本项目不包含官方规则书全文，也不替代正式规则书。规则细节存在争议时，以你的桌面规则或官方资料为准。
+适合中文 COC 单人团、短团、Keeper 备团、快速车卡、NPC 生成和长期团续跑。规则采用 COC 7 版，开团时可以约定本团房规。
 
 ## ⚖️ 许可证
 
-本项目采用 [MIT License](LICENSE)。
-
-## ⚠️ 免责声明
-
-- 本项目是面向桌面角色扮演游戏的非官方辅助工具，不隶属于 Chaosium Inc.、Call of Cthulhu 官方出版方或任何相关权利方。
-- “Call of Cthulhu”“克苏鲁的呼唤”等名称及相关商标、规则体系、世界观版权归其各自权利人所有。
-- 本项目不包含官方规则书全文，也不替代正式规则书。
-- 脚本中的随机结果仅用于游戏娱乐，不应用于现实决策、赌博、抽奖或任何需要可审计随机性的场景。
-- AI 生成的剧情、规则解释、NPC、模组和角色卡可能存在错误，正式开团或公开发布前建议由 Keeper 人工复核。
+本项目代码和自有文档采用 [MIT License](LICENSE)。`assets/scenarios/ancient-city/` 内的第三方剧本及文本转换版本采用 **CC BY-NC-SA 4.0**；作者、来源和改动说明见 [NOTICE.md](assets/scenarios/ancient-city/NOTICE.md)。

@@ -2,6 +2,8 @@
 
 这里用于保存生成的 COC 模组、场景大纲或 Keeper 笔记。v2 长期跑团记忆默认不再写入 skill 安装目录。
 
+随仓库提供的剧本放在 `assets/scenarios/`，从 [剧本库](../references/scenario_library.md) 选择；不要将内置资源移入本目录，否则会被下面的忽略规则排除。
+
 示例文件名：
 
 ```text

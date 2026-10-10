@@ -27,6 +27,33 @@ class MemoryCliTest(unittest.TestCase):
         result = subprocess.run(cmd, cwd=ROOT, env=env, text=True, capture_output=True, check=True)
         return result.stdout
 
+    def test_edits_after_snapshot_are_visible_immediately(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.run_cmd(tmp, "init", "--data-dir", tmp, "--name", "续团")
+            self.run_cmd(tmp, "entity", "--data-dir", tmp, "--name", "续团", "--type", "investigator", "--entity", "调查员", "--status", "HP 12")
+            self.run_cmd(tmp, "snapshot", "--data-dir", tmp, "--name", "续团")
+            self.run_cmd(tmp, "entity", "--data-dir", tmp, "--name", "续团", "--type", "investigator", "--entity", "调查员", "--status", "HP 7")
+            out = self.run_cmd(tmp, "recall", "--data-dir", tmp, "--name", "续团", "--keeper")
+            self.assertIn("HP 7", out)
+            self.assertNotIn("HP 12", out)
+
+    def test_updates_preserve_visibility_and_closed_threads_leave_recall(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.run_cmd(tmp, "init", "--data-dir", tmp, "--name", "隔离")
+            self.run_cmd(tmp, "clue", "--data-dir", tmp, "--name", "隔离", "--id", "C-001", "--visibility", "keeper", "--text", "馆长是幕后主使")
+            self.run_cmd(tmp, "clue", "--data-dir", tmp, "--name", "隔离", "--id", "C-001", "--source", "地下室")
+            self.run_cmd(tmp, "entity", "--data-dir", tmp, "--name", "隔离", "--type", "investigator", "--entity", "秘密调查员", "--visibility", "keeper")
+            self.run_cmd(tmp, "entity", "--data-dir", tmp, "--name", "隔离", "--type", "investigator", "--entity", "秘密调查员", "--status", "失踪")
+            self.run_cmd(tmp, "thread", "--data-dir", tmp, "--name", "隔离", "--type", "unresolved", "--id", "T-001", "--visibility", "public", "--text", "尚待送信")
+            self.run_cmd(tmp, "thread", "--data-dir", tmp, "--name", "隔离", "--type", "unresolved", "--id", "T-001", "--status", "resolved")
+            out = self.run_cmd(tmp, "recall", "--data-dir", tmp, "--name", "隔离")
+            self.assertNotIn("馆长是幕后主使", out)
+            self.assertNotIn("秘密调查员", out)
+            self.assertNotIn("尚待送信", out)
+            data = load_memory_module().load_memory(tmp, "隔离")
+            self.assertEqual(data["threads"]["unresolved"]["T-001"]["visibility"], "public")
+            self.assertEqual(data["threads"]["unresolved"]["T-001"]["status"], "resolved")
+
     def test_v2_flow_and_keeper_isolation(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.run_cmd(
@@ -91,6 +118,13 @@ class MemoryCliTest(unittest.TestCase):
 
 
 class MemoryModuleTest(unittest.TestCase):
+    def test_malformed_import_shapes_are_rejected(self):
+        memory = load_memory_module()
+        for patch in ({"state": {"npcs": []}}, {"journal": [{}]}, {"clues": {"C-001": "not-an-object"}}):
+            value = {"schema_version": 2, "meta": {"campaign": "输入检查"}, **patch}
+            with self.subTest(patch=patch), self.assertRaises(SystemExit):
+                memory.normalize_memory(value)
+
     def test_default_data_dir_platforms(self):
         memory = load_memory_module()
         mac_dir = memory.default_data_dir(platform="darwin", environ={}, home=Path("/Users/example"))

@@ -85,6 +85,35 @@ US_NAMES = ["James Carter", "Helen Ward", "Arthur Blackwood", "Ruth Morgan", "Wa
 WEAKNESSES = ["失眠", "容易冲动", "害怕封闭空间", "过度共情", "债务压力", "对旧案有执念", "不信任权威"]
 RELATIONS = ["旧友", "导师", "前任", "失踪者家属", "债主", "同事", "房东", "病人"]
 HOBBY_SKILLS = ["侦察", "聆听", "潜行", "急救", "心理学", "图书馆使用", "闪避", "话术", "驾驶"]
+SKILL_BASES = {
+    "侦察": 25, "聆听": 20, "潜行": 20, "急救": 30, "心理学": 10,
+    "图书馆使用": 20, "话术": 5, "驾驶": 20, "法律": 5, "乔装": 5,
+    "格斗(斗殴)": 25, "历史": 5, "魅惑": 15, "说服": 10, "医学": 1,
+    "神秘学": 5, "估价": 5, "枪械(手枪)": 20, "恐吓": 15,
+    "人类学": 1, "锁匠": 1, "电气维修": 10,
+}
+
+
+def skill_base(skill, stats):
+    if skill == "母语":
+        return stats["教育 EDU"]
+    if skill == "闪避":
+        return stats["敏捷 DEX"] // 2
+    if skill.startswith("艺术/手艺"):
+        return 5
+    return SKILL_BASES.get(skill, 1)
+
+
+def allocate_points(skills, candidates, points):
+    """Spend additions above base values; leave excess unspent at the preset's 85 cap."""
+    available = [s for s in candidates if skills[s] < 85]
+    while points and available:
+        skill = RNG.choice(available)
+        skills[skill] += 1
+        points -= 1
+        if skills[skill] == 85:
+            available.remove(skill)
+    return points
 
 
 def roll(die_str):
@@ -92,6 +121,9 @@ def roll(die_str):
     expr = die_str.strip().replace(" ", "")
     if not expr:
         raise ValueError("骰式不能为空")
+    term = r"(?:\d*[dD]\d+|\d+)"
+    if not re.fullmatch(rf"[+-]?{term}(?:[+-]{term})*", expr):
+        raise ValueError(f"不支持的骰式: {die_str}")
 
     total = 0
     for sign, token in re.findall(r"([+-]?)([^+-]+)", expr):
@@ -182,6 +214,8 @@ def opposed_check(skill_a, skill_b):
         win = "A"
     elif score_b > score_a:
         win = "B"
+    elif skill_a != skill_b:
+        win = "A" if skill_a > skill_b else "B"
     else:
         win = "平局 DRAW"
     return ra, la, rb, lb, win
@@ -205,7 +239,7 @@ def generate_stats():
     dex = stats["敏捷 DEX"]
     pow_ = stats["意志 POW"]
 
-    mov = 7
+    mov = 8
     if dex < siz and str_ < siz:
         mov -= 1
     if dex > siz and str_ > siz:
@@ -246,10 +280,20 @@ def parse_san_loss(current_san, loss_expr):
     return result, level, selected, roll(selected), info
 
 
-def san_check(current_san, loss_expr):
+def san_check(current_san, loss_expr, int_value=None, day_start_san=None, lost_today=0):
     """SAN 检定与疯狂判定。"""
+    if not 0 <= current_san <= 99:
+        raise ValueError("当前 SAN 必须在 0-99 之间")
+    if int_value is not None and not 1 <= int_value <= 99:
+        raise ValueError("INT 必须在 1-99 之间")
+    if lost_today < 0 or (day_start_san is not None and not 1 <= day_start_san <= 99):
+        raise ValueError("日初 SAN 必须在 1-99 之间，今日已损失不能为负")
+    if lost_today and day_start_san is None:
+        raise ValueError("提供 --lost-today 时也需要 --day-start-san")
     check_result, level, selected_expr, loss, info = parse_san_loss(current_san, loss_expr)
-    new_san = current_san - loss
+    if loss < 0:
+        raise ValueError("SAN 损失不能为负")
+    new_san = max(0, current_san - loss)
     output = []
     if check_result is not None:
         output.append(f"SAN 检定: {check_result} -> {level}")
@@ -259,14 +303,29 @@ def san_check(current_san, loss_expr):
     output.append(f"SAN 损失: {loss} (投骰: {selected_expr})")
     output.append(f"SAN 变化: {current_san} -> {new_san}")
 
-    if loss >= 5:
-        output.append("单次损失 >= 5 -> 临时疯狂 (1D10 小时)")
-        output.append(f"疯狂表现: D10 = {RNG.randint(1, 10)} (查临时疯狂表)")
-    indefinite_threshold = math.ceil(current_san / 5) if current_san > 0 else 0
-    if loss > 0 and indefinite_threshold > 0 and loss >= indefinite_threshold:
-        output.append("单次损失 >= SAN/5 -> 不定疯狂 (持续到剧情解决)")
     if new_san <= 0:
         output.append("SAN 归零 -> 永久疯狂 (角色通常转为 NPC)")
+        return loss, new_san, output
+    if day_start_san is not None:
+        total_loss = lost_today + loss
+        threshold = math.ceil(day_start_san / 5)
+        output.append(f"本游戏日累计 SAN 损失: {total_loss}；不定疯狂阈值: {threshold}")
+        if total_loss >= threshold:
+            output.append("本游戏日累计损失达到日初 SAN 的五分之一 -> 不定疯狂；由 Keeper 处理发作及后续恢复")
+            return loss, new_san, output
+    elif loss:
+        output.append("未提供日初 SAN 与今日累计损失，无法判断不定疯狂阈值")
+    if loss >= 5:
+        if int_value is None:
+            output.append("单次损失 >= 5 -> 待 INT 检定；成功才触发临时疯狂，尚未判定")
+        else:
+            int_roll = RNG.randint(1, 100)
+            output.append(f"INT 检定: {int_roll}/{int_value}")
+            if int_roll <= int_value:
+                output.append(f"INT 成功 -> 临时疯狂 ({RNG.randint(1, 10)} 小时)")
+                output.append(f"疯狂表现: D10 = {RNG.randint(1, 10)} (由 Keeper 按场景处理)")
+            else:
+                output.append("INT 失败 -> 未触发临时疯狂")
     return loss, new_san, output
 
 
@@ -298,23 +357,20 @@ def choose_name(region):
     return RNG.choice(CN_NAMES if region == "cn" else US_NAMES)
 
 
-def score_skill(base=25, spread=45):
-    return min(85, base + RNG.randint(0, spread))
-
-
 def pregen_character(era="1920s", occupation="", region="us"):
-    """快速生成可直接开团的预设调查员。"""
+    """生成按点数分配的主题职业草稿，具体职业表和年龄调整由 Keeper 核对。"""
     stats = generate_stats()
     occ_name, occ, used_fallback = pick_occupation(occupation)
     attr_value = max(stats[attr] for attr in occ["attr"])
     credit = RNG.randint(*occ["credit"])
     occupation_points, hobby_points, spendable = skill_points(stats["教育 EDU"], attr_value, stats["智力 INT"], credit)
 
-    skills = {skill: score_skill(35, 40) for skill in occ["skills"]}
-    for skill in RNG.sample(HOBBY_SKILLS, 3):
-        skills[skill] = max(skills.get(skill, 0), score_skill(25, 35))
+    candidates = list(dict.fromkeys(occ["skills"] + HOBBY_SKILLS + ["母语"]))
+    skills = {skill: skill_base(skill, stats) for skill in candidates}
+    bases = skills.copy()
+    occupation_remaining = allocate_points(skills, occ["skills"], spendable)
+    hobby_remaining = allocate_points(skills, candidates, hobby_points)
     skills["信用评级"] = credit
-    skills["闪避"] = max(skills.get("闪避", 0), stats["敏捷 DEX"] // 2 + RNG.randint(0, 20))
 
     concept = RNG.choice(occ["concepts"])
     hook = RNG.choice(occ["hooks"])
@@ -334,6 +390,9 @@ def pregen_character(era="1920s", occupation="", region="us"):
         "credit": credit,
         "occupation_skills": occ["skills"],
         "skills": dict(sorted(skills.items())),
+        "skill_bases": bases,
+        "occupation_remaining": occupation_remaining,
+        "hobby_remaining": hobby_remaining,
         "concept": concept,
         "hook": hook,
         "weakness": weakness,
@@ -344,6 +403,7 @@ def pregen_character(era="1920s", occupation="", region="us"):
 
 def format_pregen_text(character):
     lines = ["══════════ 快速预设调查员 ══════════"]
+    lines.append("  主题职业草稿：已按预算加点；职业表、年龄调整与装备需 Keeper 核对。")
     if character["occupation_fallback"]:
         lines.append("  提示: 指定职业不在内置表，已用 民俗研究者 作为底座。")
     lines.extend([
@@ -361,6 +421,7 @@ def format_pregen_text(character):
         "  --- 技能 ---",
         f"  职业技能点  : {character['occupation_points']} (信用评级 {character['credit']} 后可分配 {character['spendable_occupation_points']})",
         f"  兴趣技能点  : {character['hobby_points']}",
+        f"  未分配点数  : 职业 {character['occupation_remaining']} / 兴趣 {character['hobby_remaining']}",
     ])
     lines.extend(f"  {k:12s}: {v}%" for k, v in character["skills"].items())
     lines.append(f"  Keeper 接入 : {character['keeper_entry']}")
@@ -375,6 +436,8 @@ def format_pregen_markdown(character):
     occ_skills = "、".join(character["occupation_skills"])
     return f"""# {character['name']} - COC 7版预设调查员
 {fallback}
+> 主题职业草稿：已按预算加点；职业表、年龄调整与装备需 Keeper 核对。技能上限 85 是本预设约定。
+
 ## 基础信息
 
 | 项目 | 内容 |
@@ -401,6 +464,8 @@ def format_pregen_markdown(character):
 | 信用评级预留 | {character['credit']} |
 | 可分配职业技能点 | {character['spendable_occupation_points']} |
 | 兴趣技能点 | {character['hobby_points']} |
+| 未分配职业点 | {character['occupation_remaining']} |
+| 未分配兴趣点 | {character['hobby_remaining']} |
 
 职业技能建议：{occ_skills}
 
@@ -428,6 +493,9 @@ def main():
     parser.add_argument("--opposed", nargs=2, type=int, help="D100 对抗检定 (A 技能值 B 技能值)")
     parser.add_argument("--coc-stats", action="store_true", help="生成完整 COC 属性")
     parser.add_argument("--san-check", nargs=2, help="SAN检定 (当前SAN 损失格式) e.g. --san-check 60 0/1d6")
+    parser.add_argument("--int", dest="int_value", type=int, help="SAN 单次损失至少 5 时进行 INT 检定")
+    parser.add_argument("--day-start-san", type=int, help="本游戏日开始时 SAN；用于不定疯狂阈值")
+    parser.add_argument("--lost-today", type=int, default=0, help="本次之前，本游戏日累计 SAN 损失")
     parser.add_argument("--damage", nargs=2, help="伤害计算 (武器伤害公式 DB公式) e.g. --damage 1d10+2 1d4")
     parser.add_argument("--pregen", action="store_true", help="快速生成预设调查员")
     parser.add_argument("--era", default="1920s", choices=["1890s", "1920s", "modern"], help="预设调查员时代")
@@ -468,10 +536,13 @@ def main():
         print("D100 对抗检定")
         print(f"   A (技能 {sa}%): 掷骰 {ra} -> {la}")
         print(f"   B (技能 {sb}%): 掷骰 {rb} -> {lb}")
-        print(f"   结果: {'A 获胜' if win == 'A' else ('B 获胜' if win == 'B' else '平局')}")
+        print(f"   结果: {'A 获胜' if win == 'A' else ('B 获胜' if win == 'B' else '技能值与成功等级相同，双方另投 D100，低者获胜')}")
     elif args.san_check:
         san, loss_expr = args.san_check
-        loss, new_san, outs = san_check(int(san), loss_expr)
+        try:
+            loss, new_san, outs = san_check(int(san), loss_expr, args.int_value, args.day_start_san, args.lost_today)
+        except ValueError as exc:
+            parser.error(str(exc))
         print(f"SAN 检定 (当前: {san})")
         for item in outs:
             print(f"   {item}")

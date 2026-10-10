@@ -2,7 +2,7 @@
 
 ## 预设调查员
 
-优先用脚本生成可直接开团的 Markdown：
+用脚本生成按技能点预算分配的 Markdown 草稿：
 
 ```bash
 python scripts/dice.py --pregen --era modern --occupation 记者 --region cn --format markdown
@@ -23,6 +23,8 @@ python scripts/dice.py --pregen --era modern --occupation 记者 --region cn --f
 当前脚本至少覆盖：私家侦探、记者、医生、教授、古董商、警员、民俗研究者、罪犯。
 
 若用户指定不在列表里的职业，使用最接近职业作为底座，并说明需要人工微调职业技能。
+
+内置职业表是主题预设，不能当成完整官方职业表。脚本从技能基础值上加点，信用评级占用职业点，显示尚未分配的余额；技能上限 85 是预设约定。正式车卡还需核对职业公式、技能选择、年龄带来的属性与 MOV 调整、装备和桌规。母语以 EDU、闪避以 DEX/2 为基础。MOV 输出为未做年龄减值的 7/8/9。
 
 ## NPC
 

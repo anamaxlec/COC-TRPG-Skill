@@ -1,5 +1,7 @@
 # 模组与场景设计
 
+用户要跑现成剧本时先读 [scenario_library.md](scenario_library.md)，读取原作后备团；本页用于原创或明确要求的改编，不用原创大纲替代尚未读取的原作。
+
 写模组时优先使用 `templates/scenario_outline.md`，并把 Keeper Only 内容和玩家可见内容分开。
 
 ## 最小结构
