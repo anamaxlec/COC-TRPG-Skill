@@ -14,7 +14,7 @@
 
 ## ✨ 主要功能
 
-- **🎭 自由行动与 Keeper 主持**：自然语言推进调查；NPC 等待玩家回答时及时停下，不替玩家作出决定。支持平衡、剧情沉浸、规则教学三种风格及自定义 KP 风格。
+- **🎭 自由行动与 Keeper 主持**：自然语言推进调查；NPC 提问后等待玩家回应，调查员的选择始终交给玩家。支持平衡、剧情沉浸、规则教学三种风格及自定义 KP 风格。
 - **🎲 COC 7e 骰子工具**：D100 技能检定、奖励/惩罚骰、普通对抗、SAN、伤害与属性生成。实际骰点由 Python 脚本产生。
 - **📝 调查员与 NPC**：按时代、职业、地区生成预设角色草稿，提供人物背景、弱点、关系钩子和 NPC / 模组模板。
 - **🧠 v2 长团记忆**：分别记录玩家已知信息和 Keeper 幕后内容，持续维护场景、角色状态、线索、未结算事项与威胁时钟。
@@ -29,7 +29,7 @@
 **主持与剧情**
 - 减少每轮固定菜单及重复提示，根据场景提供行动切口；自由行动始终有效。
 - NPC 向调查员提问、等待表态或邀请回应时，Keeper 必须停下交给玩家回答；加强跨回合叙事变化和模组事件的因果连续性。
-- 现成剧本按原作真相与线索备团，玩家行动可以改变后续事件，但不随意重写已确定的真相。
+- 现成剧本沿用原作真相与线索，并依据玩家行动推演后续事件。
 
 **检定与角色**
 - 修复普通对抗双方成功等级、技能值相同时的处理：追加 D100 决胜骰并显示每轮结果；决胜重复同点最多处理 10 轮，再交由 Keeper 裁定。
@@ -73,7 +73,7 @@ mkdir -p .agents/skills
 git clone https://github.com/anamaxlec/COC-TRPG-Skill.git .agents/skills/coc-trpg-skill
 ```
 
-也可以下载仓库并将文件夹复制到对应目录，确保目录中直接包含 `SKILL.md`。安装位置以 [Codex Skills 文档](https://developers.openai.com/codex/skills) 为准。已有安装可在 Skill 目录运行 `git pull --ff-only` 更新；如未识别新 Skill，请刷新或重新启动 Codex。
+也可以下载仓库并复制到对应目录，根目录包含 `SKILL.md` 即可。更多安装方式见 [Codex Skills 文档](https://developers.openai.com/codex/skills)。已有安装可在 Skill 目录运行 `git pull --ff-only` 更新；如未识别新 Skill，请刷新或重新启动 Codex。
 
 ### 2. 唤醒 Keeper
 
@@ -87,16 +87,16 @@ git clone https://github.com/anamaxlec/COC-TRPG-Skill.git .agents/skills/coc-trp
 
 ```text
 你当 Keeper，带我跑一个发生在 1990 年代中国南方小城的 COC 单人团。
-希望慢热调查、小说式叙事，规则解释简短，不要替我决定调查员的行动。
+希望慢热调查、小说式叙事，规则解释简短，调查员的行动和回答由我自己决定。
 ```
 
-Keeper 会按已有信息直接推进开团；只有缺少关键设置时才确认。进入场景后，你可以自由描述动作，例如：
+Keeper 根据已有设定开团，必要时确认关键设置。进入场景后，你可以自由描述动作，例如：
 
 ```text
 我先不进去，站在门外听听屋子里的动静。
 ```
 
-不需要每回合从菜单选一个动作。
+后续直接用自然语言行动即可。
 
 ### 3. 常用指令
 
@@ -118,15 +118,15 @@ Keeper 会按已有信息直接推进开团；只有缺少关键设置时才确�
 | 剧情沉浸 | 增加场景、人物与环境细节，降低规则说明频率 |
 | 规则教学 | 解释关键检定、成功等级与后果，适合新玩家 |
 
-也可以直接描述自己的风格并保存。风格只影响叙事和信息呈现，不会修改骰子结果、NPC 隐藏动机或剧本真相。
+也可以直接描述并保存自己的主持风格，设定叙事节奏、规则解释和信息展示方式。骰子结算、人物动机和剧情因果沿用统一的主持规则。
 
-Keeper 每轮先结算玩家已声明的行动，再描述可感知的变化，并在下一个需要玩家决定的时刻停下。NPC 提问后不会自动替调查员答话。检定只用于结果不确定且失败有实际影响的行动；核心推论保留替代线索路径，失败仍可能带来时间、危险或机会成本。
+Keeper 每轮先结算玩家已声明的行动，再描述可感知的变化，并在下一个需要玩家决定的时刻停下。NPC 提问后暂停，等待玩家回答。检定只用于结果不确定且失败有实际影响的行动；核心推论保留替代线索路径，失败仍可能带来时间、危险或机会成本。
 
 具体约定参见 [KP 风格](references/keeper_style.md)、[检定与 SAN](references/checks_and_san.md) 和 [模组设计](references/scenario_design.md)。
 
 ## 📚 剧本库
 
-输入“剧本库”或“推荐一个现成剧本”可先获得**无剧透介绍**。确定剧本后，Keeper 再按需读取原作正文与幕后资料；没有取得正文时，不会仅凭简介声称在主持原作。
+输入“剧本库”或“推荐一个现成剧本”可先获得**无剧透介绍**。确定剧本后，Keeper 读取原作正文与幕后资料，再准备开场和后续事件。
 
 ### 内置中文模组：《古城诡秘》
 
@@ -156,13 +156,13 @@ Keeper 每轮先结算玩家已声明的行动，再描述可感知的变化，�
 | The Lightless Beacon | 灯塔主题的短篇调查 | [官方目录](https://www.chaosium.com/cthulhu-adventures/) |
 | The Haunting | Quick-Start 内的入门调查 | [Quick-Start PDF](https://www.chaosium.com/content/FreePDFs/CoC/CHA23131%20Call%20of%20Cthulhu%207th%20Edition%20Quick-Start%20Rules.pdf) |
 
-上述英文模组**仅提供官方入口，仓库不收录正文**。其中 `Alone Against the Flames` 按编号段落推进，应遵循原作跳转与选择结构。
+上述英文模组通过 Chaosium 官方入口获取正文。其中 `Alone Against the Flames` 按编号段落推进，应遵循原作跳转与选择结构。
 
 详见 [剧本库与读取方式](references/scenario_library.md)。中文合集的第三方授权见 [来源与许可](assets/scenarios/ancient-city/NOTICE.md)。
 
 ## 🧠 长期记忆 v2
 
-长期战役需要记住哪些事件已经发生、人物现在在哪里、哪些线索已经揭露，以及尚未兑现的幕后后果。本项目将这些内容保存为结构化记忆，而非依赖完整对话历史。
+长期战役需要记住哪些事件已经发生、人物现在在哪里、哪些线索已经揭露，以及尚未兑现的幕后后果。本项目使用结构化记忆保存并更新这些状态。
 
 | 模块 | 内容 |
 |---|---|
@@ -173,7 +173,7 @@ Keeper 每轮先结算玩家已声明的行动，再描述可感知的变化，�
 | `threads` / `clocks` | 未解决问题、延迟结算、伏笔及威胁进度 |
 | `summaries` | 玩家可知摘要、Keeper 摘要与场景摘要 |
 
-Agent 可以在关键事件后使用脚本更新记忆，不必每一轮普通叙事都写入。
+Agent 在关键事件后更新记忆，普通叙事则直接推进。
 
 ### 创建与继续战役
 
@@ -189,14 +189,14 @@ python scripts/memory.py init \
   --characters "林知远" \
   --style "平衡 Keeper"
 
-# 查看当前团档（Keeper 信息用于幕后恢复，不应直接贴给玩家）
+# 查看 Keeper 续团摘要
 python scripts/memory.py recall --name "榕渊" --keeper
 
 # 导出单文件快照
 python scripts/memory.py snapshot --name "榕渊"
 ```
 
-普通 `recall` 只输出玩家可知摘要；加上 `--keeper` 才输出幕后信息、暗骰和隐藏事件。下一轮接续也明确区分可见范围：
+`recall` 输出玩家可知摘要，`recall --keeper` 另包含幕后信息、暗骰和隐藏事件。下一轮接续也明确区分可见范围：
 
 ```bash
 python scripts/memory.py set-current --name "榕渊" \
@@ -204,7 +204,7 @@ python scripts/memory.py set-current --name "榕渊" \
   --keeper-hook "馆长正在门内销毁最后一封信"
 ```
 
-`--public-hook` 用于玩家可见的接续，`--keeper-hook` 仅用于幕后主持；旧版 `--hook` 仍可使用，但视作 Keeper 专用提示。
+`--public-hook` 保存玩家可见的接续，`--keeper-hook` 保存幕后安排；旧版 `--hook` 兼容为 Keeper 专用提示。
 
 角色数值、线索、NPC 行动和未结算事件分别由 `entity`、`clue`、`record`、`thread`、`clock` 等命令维护。详细例子见 [v2 记忆与续团手册](references/memory_playbook.md)。
 
@@ -223,18 +223,18 @@ python scripts/memory.py load --file "/path/to/save.cocsave.json"
 | macOS / Linux | `~/.codex/data/coc-trpg-skill` |
 | Windows | `%APPDATA%\coc-trpg-skill` |
 
-可通过 `COC_TRPG_DATA_DIR` 或 `--data-dir` 更改。旧 v1 的 `scenarios/`、`saves/` 不自动迁移，可执行 `python scripts/memory.py archive-legacy` 复制到归档目录。
+可通过 `COC_TRPG_DATA_DIR` 或 `--data-dir` 更改。旧 v1 的 `scenarios/`、`saves/` 可用 `python scripts/memory.py archive-legacy` 归档，原始文件保持不变。
 
-**注意**：玩家与 Keeper 信息隔离用于控制回顾输出，并不对本地文件加密。直接打开完整团档仍能看到幕后内容。
+`public` / `keeper` 控制回顾的内容范围。完整团档含有幕后信息，建议保存在私有位置。
 
 ## ☁️ GitHub 团档同步（可选）
 
-建议建立一个**独立私有 GitHub 仓库**（例如 `yourname/COC-Saves`），用于保存完整团档。同步使用目标仓库的 `coc-saves` 分支，不会把团档提交到本 Skill 的 `main` 分支。
+建议建立一个**独立私有 GitHub 仓库**（例如 `yourname/COC-Saves`），用于保存完整团档。团档保存在目标仓库的 `coc-saves` 分支，Git 历史记录各次同步。
 
 在 GitHub 创建好私有仓库，并配置 Git 提交身份与访问权限后：
 
 ```bash
-# 配置目标仓库（仅本地配置，不会创建或上传远程仓库）
+# 配置已经创建的存档仓库
 python scripts/github_memory.py init --repo yourname/COC-Saves
 python scripts/github_memory.py status
 
@@ -247,13 +247,13 @@ python scripts/github_memory.py pull --name "榕渊"
 python scripts/memory.py recall --name "榕渊" --keeper
 ```
 
-`--include-keeper` 表示明确允许上传包含幕后秘密的完整团档。Agent 只有在用户授权目标仓库和上传范围后才可以同步；普通“存档”仍只保存本地。
+`--include-keeper` 表示授权上传包含幕后信息的完整团档。同步时指定目标仓库及上传范围；日常存档使用本地 `snapshot`。
 
-已有同名本地团档时，`pull` 默认停止。确认采用云端进度后，可使用 `--replace-local`，脚本会在覆盖前生成本地备份。同步也会检测同团远端变化，冲突时拒绝擅自覆盖，不执行强推或自动剧情合并。
+本地已有同名团档时，可确认使用 `--replace-local` 采用云端版本，脚本会先备份本地进度。多设备进度发生分叉时，同步将提示冲突，以便检查并保留需要的剧情版本。
 
-也可以使用自己的 [fork](https://github.com/anamaxlec/COC-TRPG-Skill/fork)，但**公开 fork 的所有分支均可被访问**，包括 `coc-saves` 中的完整 Keeper 秘密；提交历史也不会因为删除当前文件而自动消失。私密团应使用私有仓库。
+也支持使用自己的 [fork](https://github.com/anamaxlec/COC-TRPG-Skill/fork)。公开 fork 的分支与 Git 历史均公开，包含幕后信息的团档建议使用独立私有仓库。
 
-目前同步的是结构化团档，外部图片、模组 PDF 和角色附件不会自动上传。SSH、备份恢复与冲突处理参见 [GitHub 存档手册](references/github_memory.md)。
+GitHub 同步结构化团档；外部图片、模组 PDF 和角色附件可按需另行备份。SSH、备份恢复与冲突处理参见 [GitHub 存档手册](references/github_memory.md)。
 
 ## 🐙 交互菜单
 
@@ -299,7 +299,7 @@ python scripts/random_name.py --era 1920s --region cn --count 5
 python scripts/random_encounter.py --era modern --type urban --count 3
 ```
 
-SAN 示例中的 `--lost-today 9` 指**本次检定前**已经损失的 SAN；跨游戏日需更新 `--day-start-san` 并重置累计值。脚本负责给出骰点和结算结果，**不会自动修改团档中的调查员数值**。
+SAN 示例中的 `--lost-today 9` 指**本次检定前**已经损失的 SAN；跨游戏日需更新 `--day-start-san` 并重置累计值。骰子脚本负责结算，调查员数值可通过 `memory.py entity` 更新。
 
 `--pregen` 提供记者、医生、教授、警员、私家侦探、古董商、民俗研究者和罪犯等主题职业。生成的是已按预算分配技能点的**角色草稿**；正式职业技能表、年龄调整和装备仍需核对。
 
@@ -311,7 +311,7 @@ SAN 示例中的 `--lost-today 9` 指**本次检定前**已经损失的 SAN；�
 python -m unittest discover -s tests -v
 ```
 
-测试覆盖骰子规则、记忆状态、存档与 GitHub 冲突处理等；GitHub 同步相关测试需要本机安装 Git，并使用本地测试仓库，不上传真实团档。
+测试覆盖骰子规则、记忆状态、存档与 GitHub 冲突处理等。GitHub 同步测试需要本机安装 Git，并在本地模拟仓库中运行。
 
 Keeper 的实际主持表现单独评估：
 
@@ -323,7 +323,7 @@ python scripts/keeper_eval.py prepare --output-dir /tmp/coc-keeper-eval
 python scripts/keeper_eval.py report --output-dir /tmp/coc-keeper-eval
 ```
 
-这套评估覆盖 NPC 提问时停顿、隐藏信息、失败后果、玩家改变事件、续团连续性和叙事重复等场景。评估需使用模型实际生成的回复，并独立给出评分和具体依据；`prepare` 本身不代表模型已经接受测试，也不会自动给出通过结论。
+这套评估覆盖 NPC 提问时停顿、隐藏信息、失败后果、玩家改变事件、续团连续性和叙事重复等场景。先用 `prepare` 准备场景，再保存被测模型的实际回复与独立评分，最后由 `report` 汇总结果。
 
 支持接收 stdin、输出 stdout 的模型命令时，也可使用 `keeper_eval.py run --runner ... --judge ...` 执行。详见 [Keeper 对话评估说明](tests/keeper_evals/README.md)。
 
@@ -366,17 +366,17 @@ coc-trpg-skill/
 | [npc_card.md](templates/npc_card.md) | NPC 数据卡 |
 | [scenario_outline.md](templates/scenario_outline.md) | 模组大纲 |
 
-## 📌 使用边界
+## 📌 环境与规则
 
-- 默认遵循《克苏鲁的呼唤》第 7 版；可另行约定房规，但脚本不保证覆盖所有变体，也不替代正式规则书。
-- 只有能够执行 Python 脚本的环境才能实际运行骰子和记忆工具；无法执行时应请玩家自行投骰，不能编造随机结果或声称已经保存。
-- 角色草稿需要进一步核对正式职业规则；现成模组需先取得原作正文。
-- 单人团可针对原作的多人遭遇与技能覆盖进行适配，变动应写入本团记忆。
+- **规则**：默认使用 COC 7 版；房规可在开团时约定，具体判定参考正式规则书。
+- **运行环境**：Python 3.8+ 用于骰子、车卡与本地记忆；GitHub 同步另需 Git 和目标仓库写入权限。
+- **调查员**：预设角色是主题职业草稿，可结合职业技能表、年龄与装备继续完善。
+- **模组适配**：现成剧本读取原作正文后备团；单人团可调整多人遭遇与技能覆盖，并记录本团改编。
 
 ## ⚖️ 许可证
 
 本项目自有代码与文档采用 [MIT License](LICENSE)。
 
-`assets/scenarios/ancient-city/` 中的《古城诡秘》原作及文本转换版本遵循 **CC BY-NC-SA 4.0**，须保留署名、遵守非商业使用与相同方式共享要求。作者、来源和转换说明参见 [NOTICE.md](assets/scenarios/ancient-city/NOTICE.md)。Chaosium 官方免费模组仅提供原始获取入口，仓库没有重新分发其正文。
+`assets/scenarios/ancient-city/` 中的《古城诡秘》原作及文本转换版本遵循 **CC BY-NC-SA 4.0**，须保留署名、遵守非商业使用与相同方式共享要求。作者、来源和转换说明参见 [NOTICE.md](assets/scenarios/ancient-city/NOTICE.md)。Chaosium 官方免费模组通过原始入口获取正文。
 
-本项目是独立社区工具，与 Chaosium 无官方关联。
+本项目为独立社区工具。
